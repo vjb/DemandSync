@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pymongo
+google-generativeai
+google-cloud-discoveryengine
+pydantic
+sse-starlette
+python-dotenv
+pytest

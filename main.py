@@ -24,6 +24,10 @@ class TriggerRequest(BaseModel):
 class SimulateSalesRequest(BaseModel):
     item_id: str
 
+class RefineRequest(BaseModel):
+    item_id: str
+    refinement: str
+
 log_queue = asyncio.Queue()
 
 async def update_callback(message: str, data=None):
@@ -43,6 +47,20 @@ async def trigger_event(req: TriggerRequest):
 async def simulate_sales(req: SimulateSalesRequest):
     asyncio.create_task(run_viral_sales(req.item_id))
     return {"status": "simulating"}
+
+@app.post("/api/refine")
+async def refine_campaign(req: RefineRequest):
+    asyncio.create_task(run_refine_flow(req.item_id, req.refinement))
+    return {"status": "started"}
+
+async def run_refine_flow(item_id: str, refinement: str):
+    await log_queue.put(json.dumps({"message": f"[INFO] Copilot refinement initiated: {refinement}"}))
+    result = await agent.handle_refinement(item_id, refinement)
+    if result:
+        await log_queue.put(json.dumps({
+            "message": "[INFO] Ad payload generated and deployed.",
+            "campaign": result
+        }))
 
 async def run_agent_flow(event_description: str):
     await log_queue.put(json.dumps({"message": "[INFO] Agent flow sequence initiated."}))
@@ -66,6 +84,14 @@ async def run_viral_sales(item_id: str):
             "message": "[INFO] Supply chain actuation event completed.",
             "po": po
         }))
+
+@app.post("/api/webhook/supplier")
+async def supplier_webhook(req: Request):
+    data = await req.json()
+    await log_queue.put(json.dumps({
+        "message": f"[EXTERNAL WEBHOOK] Supplier API received PO {data.get('po_number')} for {data.get('quantity')} units."
+    }))
+    return {"status": "received", "ledger_id": os.urandom(4).hex()}
 
 @app.get("/api/logs")
 async def stream_logs(request: Request):

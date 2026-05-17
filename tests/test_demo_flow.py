@@ -33,17 +33,30 @@ def app_server():
 
 def test_demo_flow_e2e(app_server):
     os.makedirs("assets", exist_ok=True)
+    
+    # Pre-seed DB to guarantee stock for the test
+    from pymongo import MongoClient
+    from dotenv import load_dotenv
+    load_dotenv()
+    try:
+        client = MongoClient(os.environ.get("MONGO_URI"))
+        db = client.get_database("demandsync_db")
+        db.local_inventory.update_many({}, {"$set": {"stock_count": 5}})
+    except Exception as e:
+        print(f"Seed error: {e}")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
         # 1. Open Dashboard
+        page.on("console", lambda msg: print(f"Browser console: {msg.text}"))
+        page.on("pageerror", lambda err: print(f"Browser error: {err}"))
         page.goto(app_server)
         assert "DemandSync" in page.title()
 
-        # 2. Trigger Blizzard Event
-        page.select_option("#event-select", "Category 4 Blizzard hitting Central Park")
+        # 2. Trigger Event
+        page.select_option("#event-select", "Local American Tennis Player wins US Open upset")
         page.click("#trigger-btn")
 
         # 3. Wait for price to surge and image to render
@@ -54,6 +67,11 @@ def test_demo_flow_e2e(app_server):
         price_container = page.locator("#price-container")
         price_container.wait_for(state="visible", timeout=15000)
         
+        # Verify Multi-channel tabs exist
+        assert page.locator("button:has-text('Instagram')").is_visible()
+        assert page.locator("button:has-text('Twitter')").is_visible()
+        assert page.locator("button:has-text('Facebook')").is_visible()
+        
         # 4. Click Simulate Viral Sales
         viral_btn = page.locator("#viral-btn")
         viral_btn.wait_for(state="visible")
@@ -63,7 +81,7 @@ def test_demo_flow_e2e(app_server):
         po_receipt = page.locator("#po-receipt")
         po_receipt.wait_for(state="visible", timeout=30000)
         
-        # Take screenshot of the ultimate win
-        page.screenshot(path="assets/demo_god_mode_success.png", full_page=True)
+        page.screenshot(path="assets/e2e_supply_chain.png", full_page=True)
+        page.screenshot(path="assets/e2e_god_mode.png", full_page=True)
 
         browser.close()

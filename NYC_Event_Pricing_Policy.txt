@@ -1,0 +1,9 @@
+DEMANDSYNC CORPORATE PRICING POLICY - NEW YORK CITY EVENTS
+
+1. SEVERE WEATHER: During extreme weather alerts (Blizzard, Flash Flood, Hurricane, Extreme Heatwave), markup on essential weather-related items (generators, neck fans, shovels, umbrellas) is strictly capped at +15% over base MSRP to prevent price gouging.
+
+2. SPORTS & ENTERTAINMENT: During major sporting events (US Open Tennis, NYC Marathon), markup on non-essential spectator apparel and gear can be increased by up to +35% depending on supply and demand. 
+
+3. GENERAL ANOMALIES: All other spontaneous demand anomalies are capped at +20%.
+
+Any calculated price that violates these constraints must be overridden and clamped to the maximum allowable threshold.

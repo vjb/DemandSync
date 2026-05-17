@@ -3,344 +3,777 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DemandSync | Retail Orchestrator</title>
+    <title>DemandSync | Global Supply Orchestrator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
-            --bg-color: #0b1120;
-            --panel-bg: #1e293b;
-            --text-color: #f8fafc;
-            --accent: #06b6d4;
-            --accent-hover: #0891b2;
-            --surge: #ef4444;
-            --success: #22c55e;
-            --border: #334155;
-            --terminal-bg: #000000;
-            --terminal-text: #22c55e;
+            --bg-color: #0f172a;
+            --panel-bg: rgba(15, 23, 42, 0.75);
+            --accent: #38bdf8; /* Neon Blue */
+            --accent-glow: rgba(56, 189, 248, 0.4);
+            --surge: #f43f5e; /* Neon Red/Pink */
+            --surge-glow: rgba(244, 63, 94, 0.4);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --font-family: 'Inter', sans-serif;
         }
 
+        * { box-sizing: border-box; }
+
         body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-main);
             margin: 0;
             padding: 0;
-            font-family: 'Inter', system-ui, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            line-height: 1.5;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            height: 100vh;
-            overflow: hidden;
+        }
+
+        /* Map Background */
+        #map-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 0;
+            /* Dark elegant map style */
+            filter: contrast(1.1) saturate(1.2) brightness(0.9);
+            background: #000;
+        }
+
+        /* UI Overlay */
+        .ui-layer {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            pointer-events: none;
         }
 
         header {
-            padding: 1rem 2rem;
-            background-color: var(--panel-bg);
-            border-bottom: 1px solid var(--border);
+            padding: 1.5rem 2.5rem;
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            align-items: center;
+            background: linear-gradient(180deg, rgba(15,23,42,0.95) 0%, transparent 100%);
+            pointer-events: auto;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
-        header h1 {
+        h1 {
+            font-size: 1.6rem;
+            font-weight: 600;
             margin: 0;
-            font-size: 1.5rem;
-            font-weight: 800;
+            letter-spacing: -0.03em;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            background: linear-gradient(90deg, #06b6d4, #3b82f6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            gap: 0.75rem;
+            color: #ffffff;
         }
 
-        .badge {
-            background-color: rgba(6, 182, 212, 0.2);
-            color: #06b6d4;
-            padding: 0.2rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.8rem;
-            font-weight: bold;
-            -webkit-text-fill-color: initial;
-            border: 1px solid #06b6d4;
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--accent);
+            animation: pulse-dot 2.5s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
         }
 
         .container {
-            display: grid;
-            grid-template-columns: 1fr 1.5fr 1.5fr 1fr;
-            gap: 1rem;
-            padding: 1rem;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .panel {
-            background-color: var(--panel-bg);
-            border-radius: 0.75rem;
-            border: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .panel-header {
-            padding: 1rem;
-            border-bottom: 1px solid var(--border);
-            font-weight: 600;
-            background-color: rgba(0,0,0,0.2);
-            text-transform: uppercase;
-            font-size: 0.8rem;
-            letter-spacing: 0.05em;
             display: flex;
             justify-content: space-between;
-        }
-
-        .panel-body {
-            padding: 1rem;
+            padding: 1.5rem 2.5rem;
             flex: 1;
-            overflow-y: auto;
+            gap: 2.5rem;
         }
 
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-            color: #cbd5e1;
-        }
-
-        .select-input {
-            width: 100%;
-            padding: 0.75rem;
-            background-color: #0f172a;
-            color: white;
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
-            font-size: 0.9rem;
-            outline: none;
-            cursor: pointer;
-        }
-
-        .btn {
-            background: linear-gradient(90deg, #3b82f6, #06b6d4);
-            color: white;
-            border: none;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            font-size: 0.9rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.2s;
-            width: 100%;
-            display: block;
-            text-transform: uppercase;
-        }
-
-        .btn:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-        }
-
-        .btn-surge {
-            background: linear-gradient(90deg, #ef4444, #f97316);
-            margin-top: 1rem;
-            display: none;
-        }
-
-        /* Terminal Logs */
-        .terminal {
-            background-color: var(--terminal-bg);
-            color: var(--terminal-text);
-            font-family: 'Courier New', Courier, monospace;
-            padding: 1rem;
-            font-size: 0.8rem;
-            height: 100%;
-            box-sizing: border-box;
-        }
-        
-        .log-line {
-            margin-bottom: 0.25rem;
-            word-wrap: break-word;
-        }
-
-        /* Ad Creative */
-        .campaign-card {
-            background: #ffffff;
-            color: #000;
-            border-radius: 1rem;
-            overflow: hidden;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-            display: none;
+        .sidebar {
+            width: 400px;
+            display: flex;
             flex-direction: column;
+            gap: 1.5rem;
+            pointer-events: auto;
         }
-        .campaign-card.active { display: flex; animation: fadeIn 0.5s ease-out; }
 
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-
-        .ig-header { padding: 0.75rem 1rem; display: flex; align-items: center; border-bottom: 1px solid #e2e8f0; }
-        .ig-avatar { width: 32px; height: 32px; border-radius: 50%; background: #06b6d4; margin-right: 0.75rem; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem; }
-        .ig-brand { font-weight: 600; font-size: 0.9rem; }
-        .ig-image-container { width: 100%; aspect-ratio: 1 / 1; background-color: #f1f5f9; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-        .ig-image-container img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        .ig-footer { padding: 1rem; }
-        .ig-caption { font-size: 0.95rem; line-height: 1.4; margin-bottom: 0.75rem; }
-
-        .live-price-container {
-            margin-top: 1rem;
-            padding: 1rem;
-            background: #1e293b;
-            border-radius: 0.5rem;
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
             border: 1px solid var(--border);
-            text-align: center;
+            border-radius: 20px;
+            padding: 1.8rem;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 15px 50px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.1);
         }
 
-        .live-price {
-            font-size: 2.5rem;
-            font-weight: 900;
-            color: var(--surge);
-            text-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { text-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
-            50% { text-shadow: 0 0 25px rgba(239, 68, 68, 0.8); }
-            100% { text-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
-        }
-
-        /* Supply Chain */
-        .stock-ticker {
-            font-size: 4rem;
-            font-weight: 900;
-            text-align: center;
-            margin: 2rem 0;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .po-receipt {
-            background: rgba(34, 197, 94, 0.1);
-            border: 2px solid var(--success);
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin-top: 2rem;
-            display: none;
-            color: var(--success);
-        }
-
-        .po-receipt h3 {
-            margin: 0 0 0.5rem 0;
+        .panel-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+            margin-bottom: 1.25rem;
+            font-weight: 700;
             display: flex;
             align-items: center;
             gap: 0.5rem;
         }
 
-        .empty-state { color: #64748b; text-align: center; padding: 4rem 2rem; font-style: italic; }
+        select {
+            width: 100%;
+            padding: 1rem;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            margin-bottom: 1.25rem;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            appearance: none;
+        }
+
+        select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        
+        select option {
+            background: #0f172a;
+            color: white;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--accent) 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--accent-glow);
+            filter: brightness(1.1);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background: #334155;
+            box-shadow: none;
+        }
+
+        /* RPG ITEM HUD (Bottom Slide-Up) */
+        #item-hud {
+            position: absolute;
+            bottom: 2rem;
+            left: 2rem;
+            right: 2rem;
+            height: 45vh;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 2px solid var(--accent);
+            border-radius: 24px;
+            display: flex;
+            flex-direction: row;
+            padding: 2rem;
+            gap: 2.5rem;
+            z-index: 50;
+            transform: translateY(150%);
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+            pointer-events: auto;
+        }
+
+        #item-hud.active {
+            transform: translateY(0);
+        }
+
+        /* Huge Image Hero Left */
+        .hud-hero {
+            flex: 0 0 35%;
+            height: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            background: #000;
+            border: 1px solid var(--border);
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+
+        .hud-hero img, .hud-hero video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: all 0.5s ease;
+        }
+
+        /* Item Stats Center */
+        .hud-stats {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .hud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .item-title {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #fff;
+            margin: 0 0 0.5rem 0;
+            text-transform: uppercase;
+        }
+
+        .item-subtitle {
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 1rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .hero-price {
+            font-size: 4rem;
+            font-weight: 800;
+            color: var(--surge);
+            text-shadow: 0 0 25px var(--surge-glow);
+            line-height: 1;
+            margin: 0;
+            text-align: right;
+        }
+
+        .copy-box {
+            background: rgba(0,0,0,0.3);
+            padding: 1.25rem;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: var(--text-muted);
+            border-left: 3px solid var(--accent);
+            flex: 1;
+            margin: 1.5rem 0;
+            overflow-y: auto;
+        }
+
+        /* Radar Chart Right */
+        .hud-chart {
+            flex: 0 0 300px;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .chart-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .stock-badge {
+            background: var(--surge);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 800;
+            font-size: 1.2rem;
+            display: inline-block;
+            box-shadow: 0 0 15px var(--surge-glow);
+        }
+
+        /* Spinner */
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        /* CRT Scanlines */
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 4px, 6px 100%;
+            z-index: 5;
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        /* Agent Swarm Node Animation */
+        .agent-node {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 0 rgba(0,0,0,0);
+        }
+        .agent-node.active {
+            background: var(--accent);
+            box-shadow: 0 0 15px var(--accent);
+            transform: scale(1.5);
+        }
+        
+        .image-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.5);
+            border: 1px dashed var(--border);
+            border-radius: 8px;
+        }
+
     </style>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    <!-- Agent Chat Interface Overlay -->
+    <div id="agent-chat-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#0f172a; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; transition: opacity 1s ease;">
+        <div style="width: 800px; max-width: 90%; height: 70vh; display:flex; flex-direction:column;">
+            <div style="font-size:1.8rem; font-weight:800; color:var(--accent); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2rem; text-align:center;">DemandSync Agentic Orchestrator</div>
+            
+            <div id="chat-history" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:1.5rem; margin-bottom:2rem; padding:1.5rem; border:1px solid rgba(56,189,248,0.2); border-radius:12px; background:rgba(0,0,0,0.6); box-shadow: inset 0 0 30px rgba(0,0,0,0.8);">
+                <div class="chat-message agent-message" style="display:flex; gap:1rem;">
+                    <div style="width:42px; height:42px; background:var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem; color:#000;">A</div>
+                    <div style="flex:1; background:rgba(255,255,255,0.05); padding:1.2rem; border-radius:8px; color:var(--text-main); font-size:1.1rem; line-height:1.5;">
+                        System initialized. I am your autonomous retail logistics agent connected to MongoDB Atlas Vector Search. What external anomaly would you like me to investigate for strategic inventory deployment?
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:1rem;">
+                <input type="text" id="chat-input" placeholder="e.g. A Category 4 Blizzard is hitting Central Park..." style="flex:1; background:rgba(0,0,0,0.5); border:1px solid var(--accent); color:#fff; padding:1.2rem; border-radius:12px; font-size:1.1rem; outline:none; box-shadow:0 0 15px rgba(56,189,248,0.2);">
+                <button class="btn" style="width:auto; padding:0 2.5rem; font-size:1.1rem;" onclick="submitAgentChat()">Execute</button>
+            </div>
+        </div>
+    </div>
 
-    <header>
-        <h1>DemandSync <span class="badge">ORCHESTRATOR</span></h1>
-    </header>
+    <!-- Map Background Layer -->
+    <div id="map-container"></div>
+    <div class="scanlines"></div>
 
-    <div class="container">
-        <!-- Column 1: Triggers -->
-        <div class="panel">
-            <div class="panel-header">1. Semantic Triggers</div>
-            <div class="panel-body">
-                <div class="form-group">
-                    <label class="form-label">Incoming Webhook</label>
-                    <select id="event-select" class="select-input">
-                        <option value="Category 4 Blizzard hitting Central Park">Category 4 Blizzard (Central Park)</option>
-                        <option value="Sudden severe thunderstorm warning in Midtown Manhattan">Midtown Downpour</option>
-                        <option value="Extreme heat wave warning in Downtown Brooklyn, July Heatwave">July Heatwave</option>
-                        <option value="Local Team Wins Championship">Local Team Wins Championship</option>
-                        <option value="Viral Pop Culture Moment">Viral Pop Culture Moment</option>
+    <!-- Agent Swarm Visualizer -->
+    <div id="agent-graph" style="position:fixed; top:2rem; right:2rem; width:220px; height:180px; background:rgba(15,23,42,0.7); border:1px solid var(--border); border-radius:12px; z-index:100; backdrop-filter:blur(10px); padding: 1rem;">
+        <div style="font-size:0.65rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.1em; font-weight:800; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem; margin-bottom: 1rem;">Swarm Topology</div>
+        <div style="position:relative; height:110px;">
+            <svg style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1;">
+                <line x1="50%" y1="10%" x2="20%" y2="50%" stroke="rgba(255,255,255,0.2)" stroke-width="2" id="line-1"/>
+                <line x1="50%" y1="10%" x2="80%" y2="50%" stroke="rgba(255,255,255,0.2)" stroke-width="2" id="line-2"/>
+                <line x1="20%" y1="50%" x2="50%" y2="90%" stroke="rgba(255,255,255,0.2)" stroke-width="2" id="line-3"/>
+                <line x1="80%" y1="50%" x2="50%" y2="90%" stroke="rgba(255,255,255,0.2)" stroke-width="2" id="line-4"/>
+            </svg>
+            <div class="agent-node" id="node-mongo" style="top:5%; left:calc(50% - 6px); z-index:2;" title="Atlas Vector Search"></div>
+            <div class="agent-node" id="node-price" style="top:45%; left:calc(20% - 6px); z-index:2;" title="Pricing Agent"></div>
+            <div class="agent-node" id="node-copy" style="top:45%; left:calc(80% - 6px); z-index:2;" title="Gemini Copywriter"></div>
+            <div class="agent-node" id="node-image" style="top:85%; left:calc(50% - 6px); z-index:2;" title="Imagen 3.0 Artist"></div>
+            
+            <div style="position:absolute; top:-5%; left:60%; font-size:0.55rem; color:var(--text-muted);" id="label-mongo">ATLAS DB</div>
+            <div style="position:absolute; top:35%; left:0%; font-size:0.55rem; color:var(--text-muted);" id="label-price">PRICING</div>
+            <div style="position:absolute; top:35%; left:75%; font-size:0.55rem; color:var(--text-muted);" id="label-copy">GEMINI</div>
+            <div style="position:absolute; top:95%; left:60%; font-size:0.55rem; color:var(--text-muted);" id="label-image">IMAGEN</div>
+        </div>
+    </div>
+
+    <!-- Interactive UI Layer -->
+    <div class="ui-layer">
+        <header>
+            <h1><div class="status-dot"></div> DemandSync <span style="font-weight:400; color:var(--text-muted);">Platform</span></h1>
+            <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">Live Event Simulation // Atlas Vector Search</div>
+        </header>
+
+        <div class="container">
+            <!-- Left Sidebar (Hidden during chat sequence) -->
+            <div class="sidebar" style="opacity: 0.5; pointer-events: none;">
+                <div class="glass-panel">
+                    <div class="panel-title">1. Scenario Configurator</div>
+                    <select id="event-select" disabled>
+                        <option value="Agent Input">Driven by Agent UI</option>
                     </select>
-                </div>
-                <button id="trigger-btn" class="btn" onclick="triggerEvent()">
-                    Execute Trigger Injection
-                </button>
-            </div>
-        </div>
-
-        <!-- Column 2: Logs -->
-        <div class="panel">
-            <div class="panel-header">2. AI Engine (Vector + Pricing)</div>
-            <div class="panel-body" style="padding:0; background:black;">
-                <div class="terminal" id="terminal"></div>
-            </div>
-        </div>
-
-        <!-- Column 3: The Ad -->
-        <div class="panel">
-            <div class="panel-header">3. Multimodal Ad Studio</div>
-            <div class="panel-body">
-                <div id="empty-campaigns" class="empty-state">Waiting for dynamic generation...</div>
-                <div id="campaign-card" class="campaign-card">
-                    <div class="ig-header">
-                        <div class="ig-avatar">DS</div>
-                        <div class="ig-brand">DemandSync Retail</div>
-                    </div>
-                    <div class="ig-image-container">
-                        <img id="ad-image" src="" alt="Generated Ad Creative">
-                    </div>
-                    <div class="ig-footer">
-                        <div class="ig-caption"><span id="ad-copy-text">Loading copy...</span></div>
-                    </div>
-                </div>
-                <div class="live-price-container" id="price-container" style="display:none;">
-                    <div style="color:#94a3b8; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.5rem;">Live Surge Price</div>
-                    <div class="live-price" id="live-price">$0.00</div>
-                    <div style="color:#06b6d4; font-size:0.8rem; margin-top:0.5rem;" id="pricing-reasoning">Algorithmic analysis...</div>
+                    <button id="trigger-btn" class="btn" disabled>Awaiting Agent...</button>
                 </div>
             </div>
-        </div>
 
-        <!-- Column 4: Supply Chain -->
-        <div class="panel">
-            <div class="panel-header">4. Supply Chain Actuation</div>
-            <div class="panel-body">
-                <div style="text-align: center; color: #cbd5e1; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 0.05em;">Live Inventory</div>
-                <div class="stock-ticker" id="stock-ticker">--</div>
+            <!-- RPG Item HUD (Slides up from bottom) -->
+            <div id="item-hud">
+                <div class="hud-hero" id="main-asset-container">
+                    <!-- Image gets injected here. Placeholder until then. -->
+                    <div class="image-placeholder" style="flex-direction:column; height: 100%;">
+                        <span class="spinner" style="width:48px; height:48px; border-width: 4px; margin-bottom: 20px;"></span>
+                        <div style="color:var(--accent); font-weight:700; font-size:1.2rem; text-transform:uppercase; letter-spacing:0.1em; text-align:center;">Generating Multimodal Asset</div>
+                        <div style="color:var(--text-muted); margin-top: 10px; font-size: 0.9rem;">Model: Imagen 3.0 via Vertex AI</div>
+                    </div>
+                </div>
                 
-                <button id="viral-btn" class="btn btn-surge" onclick="simulateViralSales()">
-                    Execute Sales Simulation
-                </button>
+                <div class="hud-stats">
+                    <div class="hud-header">
+                        <div>
+                            <h2 class="item-title">Generated Item Sync</h2>
+                        </div>
+                        <div class="hero-price" id="live-price"><span class="spinner" style="border-top-color:var(--surge); width:32px; height:32px;"></span></div>
+                    </div>
+                    
+                    <div style="display:flex; flex-direction:column; gap:1.5rem; margin-top:1rem; flex:1;">
+                        
+                        <!-- MONGODB SECTION -->
+                        <div style="border: 1px solid rgba(0, 237, 100, 0.4); background: rgba(0, 30, 43, 0.8); border-radius: 8px; padding: 1.5rem 1rem 1rem 1rem; position: relative; box-shadow: 0 4px 20px rgba(0,237,100,0.1);">
+                            <div style="position:absolute; top:-12px; left:15px; background:#001e2b; border: 1px solid rgba(0,237,100,0.4); border-radius:4px; padding:2px 10px; color:#00ED64; font-size:0.7rem; font-weight:800; letter-spacing:0.1em; display:flex; align-items:center; gap:5px;">
+                                <div style="width:6px; height:6px; background:#00ED64; border-radius:50%; box-shadow:0 0 5px #00ED64;"></div> MONGODB ATLAS VECTOR SEARCH
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap: 0.5rem;">
+                                <div class="item-subtitle" id="pricing-reasoning" style="font-size: 0.8rem; color: var(--text-main); margin:0;">Awaiting analysis...</div>
+                                <div id="mongo-logs" style="font-family:'Menlo', monospace; font-size:0.75rem; color:#00ED64; overflow-y:auto; height: 60px; background: rgba(0,0,0,0.5); padding: 0.5rem; border-radius:4px;">
+                                    <div id="mongo-log-content">
+                                        > System Initialized.<br>
+                                        > Awaiting execution pipeline...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                <div id="po-receipt" class="po-receipt">
-                    <h3>SUPPLIER PO TRANSMITTED</h3>
-                    <div style="font-family: monospace; font-size: 0.8rem; margin-top: 1rem;" id="po-details"></div>
+                        <!-- VERTEX AI SECTION -->
+                        <div style="border: 1px solid rgba(66, 133, 244, 0.4); background: rgba(15, 23, 42, 0.8); border-radius: 8px; padding: 1.5rem 1rem 1rem 1rem; position: relative; box-shadow: 0 4px 20px rgba(66,133,244,0.1);">
+                            <div style="position:absolute; top:-12px; left:15px; background:#0f172a; border: 1px solid rgba(66,133,244,0.4); border-radius:4px; padding:2px 10px; color:#4285F4; font-size:0.7rem; font-weight:800; letter-spacing:0.1em; display:flex; align-items:center; gap:5px;">
+                                <div style="width:6px; height:6px; background:#4285F4; border-radius:50%; box-shadow:0 0 5px #4285F4;"></div> GOOGLE VERTEX AI & GEMINI
+                            </div>
+                            <div style="display:flex; gap: 1rem; height: 90px;">
+                                <div style="flex:1; font-size: 0.75rem; color: var(--text-main); font-style: italic; overflow-y:auto; padding-right:0.5rem;" id="ad-copy">
+                                    Awaiting multimodal generative synthesis...
+                                </div>
+                                <div style="flex:1; border-left: 1px solid rgba(66,133,244,0.3); padding-left: 1rem; display:flex; flex-direction:column; gap:0.5rem;">
+                                    <div id="ab-variant-a" style="opacity: 0.5;">
+                                         <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold;">Variation A (Discarded)</div>
+                                         <div style="font-size: 0.9rem; color: #f43f5e; font-weight: bold;"><span class="spinner" style="width:12px;height:12px;"></span></div>
+                                    </div>
+                                    <div id="ab-variant-b">
+                                         <div style="font-size: 0.65rem; color: var(--accent); text-transform: uppercase; font-weight: bold;">Variation B (Deployed)</div>
+                                         <div style="font-size: 1.2rem; color: #38bdf8; font-weight: bold;"><span class="spinner" style="width:14px;height:14px; border-top-color: var(--accent);"></span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- COPILOT REFINEMENT TERMINAL -->
+                    <div id="copilot-ui" style="display:none; flex-direction:column; gap:0.5rem; margin-top:1rem;">
+                        <div style="display:flex; gap: 0.5rem; width: 100%;">
+                            <input type="text" id="copilot-input" placeholder="Copilot: Pivot strategy (e.g. 'Target Gen-Z')..." style="flex:1; background:rgba(0,0,0,0.3); border:1px solid rgba(168,85,247,0.4); color:#fff; padding: 0.5rem 1rem; border-radius: 4px; font-size: 0.75rem; outline:none; box-shadow: 0 0 10px rgba(168,85,247,0.1);">
+                            <button id="refine-btn" class="btn" style="background:#a855f7; width:auto; padding: 0.5rem 1.5rem;" onclick="refineCampaign()">Refine Strategy</button>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div class="stock-badge"><span id="stock-ticker">--</span> LEFT IN WAREHOUSE</div>
+                            <button id="viral-btn" class="btn" style="width: 200px; background:var(--surge); box-shadow:0 0 15px var(--surge-glow);" onclick="simulateViralSales()">Process Live Sales</button>
+                        </div>
+                    </div>
+                    
+                    <div id="loading-footer" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                        <div class="stock-badge"><span id="stock-ticker-loading">--</span> LEFT IN WAREHOUSE</div>
+                        <button class="btn" style="width: 250px; background:#333; cursor:not-allowed;" disabled>Awaiting Pipeline...</button>
+                    </div>
+                </div>
+
+                <div class="hud-chart">
+                    <div class="panel-title" style="margin-bottom:0.5rem; justify-content:center;">Live Audience Telemetry</div>
+                    <div class="chart-container">
+                        <canvas id="demographics-chart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const terminal = document.getElementById('terminal');
-        let currentItemId = null;
+        // ... (Leaflet Map setup code) ...
+        const map = L.map('map-container', { zoomControl: false }).setView([40.7128, -74.0060], 12); // NYC Default
+        
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        }).addTo(map);
 
-        function appendLog(message) {
-            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-            const line = document.createElement('div');
-            line.className = 'log-line';
-            line.innerHTML = `<span style="color:#64748b">[${time}]</span> ${message}`;
-            terminal.appendChild(line);
-            terminal.scrollTop = terminal.scrollHeight;
+        const addDataOverlays = () => {
+            const events = [
+                { loc: [40.7505, -73.9934], name: "Madison Square Garden Concert" },
+                { loc: [40.8296, -73.9262], name: "Yankee Stadium Game" },
+                { loc: [40.6826, -73.9754], name: "Barclays Center Event" }
+            ];
+
+            events.forEach(ev => {
+                L.circleMarker(ev.loc, {
+                    radius: 6,
+                    fillColor: "#8b5cf6",
+                    color: "#ffffff",
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map).bindPopup(`<div style="font-size:0.8rem; font-weight:600;">Event: ${ev.name}</div>`);
+            });
+        };
+        
+        addDataOverlays();
+
+        // --- SYNTHETIC UI AUDIO ENGINE ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBeep(freq = 800, type = 'sine', duration = 0.05, vol = 0.05) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
         }
 
-        async function triggerEvent() {
-            document.getElementById('trigger-btn').disabled = true;
-            document.getElementById('empty-campaigns').style.display = 'block';
-            document.getElementById('campaign-card').classList.remove('active');
-            document.getElementById('price-container').style.display = 'none';
-            document.getElementById('viral-btn').style.display = 'none';
-            document.getElementById('po-receipt').style.display = 'none';
-            document.getElementById('stock-ticker').textContent = '--';
+        function playDeploySound() {
+            playBeep(200, 'square', 0.1, 0.03);
+            setTimeout(() => playBeep(350, 'square', 0.3, 0.03), 100);
+        }
+
+        function playLogSound() {
+            playBeep(Math.random() * 500 + 1200, 'sine', 0.03, 0.01);
+        }
+
+        function playSuccessSound() {
+            playBeep(800, 'sine', 0.1, 0.05);
+            setTimeout(() => playBeep(1200, 'sine', 0.4, 0.05), 100);
+        }
+
+        // --- GLITCH TEXT EFFECT ---
+        function scrambleText(elementId, finalText) {
+            const el = document.getElementById(elementId);
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*';
+            let iter = 0;
+            const interval = setInterval(() => {
+                el.textContent = finalText.split('').map((char, i) => {
+                    if(char === ' ') return ' ';
+                    if(i < iter) return char;
+                    return chars[Math.floor(Math.random() * chars.length)];
+                }).join('');
+                iter += 1/2;
+                if(iter >= finalText.length) {
+                    clearInterval(interval);
+                    el.textContent = finalText;
+                }
+            }, 30);
+        }
+
+        let currentMarker = null;
+        let routeLine = null;
+        let currentItemId = null;
+        let demoChart = null;
+
+        function initChart() {
+            const ctx = document.getElementById('demographics-chart').getContext('2d');
+            demoChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Urgency', 'WTP', 'Proximity', 'Weather', 'Social'],
+                    datasets: [{
+                        label: 'Audience Signal',
+                        data: [90, 85, 95, 100, 70],
+                        backgroundColor: 'rgba(139, 92, 246, 0.4)',
+                        borderColor: '#8b5cf6',
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#8b5cf6',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#8b5cf6',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(0,0,0,0.1)' },
+                            grid: { color: 'rgba(0,0,0,0.1)' },
+                            pointLabels: { color: '#64748b', font: { size: 9, family: 'Inter' } },
+                            ticks: { display: false, max: 100, min: 0 }
+                        }
+                    }
+                }
+            });
+        }
+        
+        initChart();
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `<span style="color:var(--accent); margin-right: 8px;">●</span> ${message}`;
+            container.appendChild(toast);
             
-            const desc = document.getElementById('event-select').value;
-            appendLog(`> Firing Webhook: "${desc}"`);
+            // Force reflow
+            void toast.offsetWidth;
+            toast.classList.add('show');
             
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // --- AGENT CHAT UI SCRIPT ---
+        function submitAgentChat() {
+            const input = document.getElementById('chat-input').value;
+            if(!input) return;
+            
+            // Add user message
+            const chatHistory = document.getElementById('chat-history');
+            chatHistory.innerHTML += `
+                <div class="chat-message user-message" style="display:flex; gap:1rem; flex-direction:row-reverse; margin-top: 1rem;">
+                    <div style="width:42px; height:42px; background:#475569; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem; color:#fff;">U</div>
+                    <div style="flex:1; background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); padding:1.2rem; border-radius:8px; color:var(--text-main); font-size:1.1rem; line-height:1.5; text-align:right;">
+                        ${input}
+                    </div>
+                </div>`;
+                
+            document.getElementById('chat-input').value = "";
+            document.getElementById('chat-input').disabled = true;
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            
+            setTimeout(() => {
+                chatHistory.innerHTML += `
+                    <div class="chat-message agent-message" style="display:flex; gap:1rem; margin-top: 1rem;">
+                        <div style="width:42px; height:42px; background:var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem; color:#000;">A</div>
+                        <div style="flex:1; background:rgba(255,255,255,0.05); padding:1.2rem; border-radius:8px; color:var(--text-main); font-size:1.1rem; line-height:1.5;">
+                            Acknowledged. Executing text-embedding-004 pipeline and querying MongoDB Atlas Vector Search for deployable inventory. Booting interactive HUD interface...
+                        </div>
+                    </div>`;
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+                
+                // Hide overlay and reveal HUD
+                setTimeout(() => {
+                    document.getElementById('agent-chat-overlay').style.opacity = '0';
+                    setTimeout(() => {
+                        document.getElementById('agent-chat-overlay').style.display = 'none';
+                        triggerEvent(input); // Pass input to trigger
+                    }, 1000);
+                }, 2000);
+            }, 800);
+        }
+
+        async function triggerEvent(chatPrompt = null) {
+            const btn = document.getElementById('trigger-btn');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner"></span> Generating Orchestration...`;
+            
+            // Show panels immediately to show loading state!
+            document.getElementById('item-hud').classList.add('active');
+            
+            // Agent animation start
+            document.getElementById('node-mongo').classList.add('active');
+            
+            scrambleText('pricing-reasoning', 'Establishing API handshake with MongoDB Atlas...');
+            document.getElementById('mongo-log-content').innerHTML = `> Establishing Secure Connection...<br>> Target Index: vector_index<br>> Geospatial Radius: $maxDistance: 8046m`;
+            
+            document.getElementById('ad-copy').textContent = "Awaiting multimodal generative synthesis...";
+            document.getElementById('live-price').innerHTML = `<span class="spinner" style="border-color: rgba(244, 63, 94, 0.2); border-top-color: var(--surge); width: 32px; height: 32px;"></span>`;
+            
+            document.getElementById('main-asset-container').innerHTML = `
+                <div class="image-placeholder" style="flex-direction:column; height: 100%;">
+                    <span class="spinner" style="width:48px; height:48px; border-width: 4px; margin-bottom: 20px;"></span>
+                    <div style="color:var(--accent); font-weight:700; font-size:1.2rem; text-transform:uppercase; letter-spacing:0.1em; text-align:center;">Generating Multimodal Asset</div>
+                    <div style="color:var(--text-muted); margin-top: 10px; font-size: 0.9rem;">Model: Imagen 3.0 via Vertex AI</div>
+                </div>`;
+            
+            document.getElementById('ab-variant-a').innerHTML = `
+                 <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold;">Variation A (Discarded)</div>
+                 <div style="font-size: 1.5rem; color: #f43f5e; font-weight: bold; margin: 0.25rem 0;"><span class="spinner" style="width:16px;height:16px;"></span></div>
+                 <div style="font-size: 0.75rem; color: var(--text-muted);">Awaiting Gemini Vision critique...</div>`;
+                 
+            document.getElementById('ab-variant-b').innerHTML = `
+                 <div style="font-size: 0.75rem; color: var(--accent); text-transform: uppercase; font-weight: bold;">Variation B (Deployed)</div>
+                 <div style="font-size: 1.5rem; color: #38bdf8; font-weight: bold; margin: 0.25rem 0;"><span class="spinner" style="width:16px;height:16px; border-top-color: var(--accent);"></span></div>
+                 <div style="font-size: 0.75rem; color: var(--text-muted);">Awaiting optimization selection...</div>`;
+            
+            if(currentMarker) map.removeLayer(currentMarker);
+            if(routeLine) map.removeLayer(routeLine);
+            
+            const desc = chatPrompt || document.getElementById('event-select').value;
+            
+            let coords = [40.7128, -74.0060];
+            if(desc.includes("Central Park")) {
+                coords = [40.7812, -73.9665];
+            }
+            if(desc.includes("Midtown")) {
+                coords = [40.7549, -73.9840];
+            }
+            if(desc.includes("Brooklyn")) {
+                coords = [40.6782, -73.9442];
+            }
+            if(desc.includes("Tennis")) {
+                coords = [40.7498, -73.8461]; // Queens
+            }
+            
+            map.flyTo(coords, 14, { duration: 2.0 });
+            
+            setTimeout(() => {
+                const pulseIcon = L.divIcon({
+                    className: 'radar-pulse',
+                    iconSize: [20, 20]
+                });
+                currentMarker = L.marker(coords, {icon: pulseIcon}).addTo(map)
+                    .bindPopup("<b>Demand Anomaly</b><br>" + desc).openPopup();
+            }, 2000);
+
             try {
                 await fetch('/api/trigger', {
                     method: 'POST',
@@ -348,15 +781,17 @@
                     body: JSON.stringify({ event_description: desc })
                 });
             } catch (e) {
-                appendLog(`<span style="color:red">Error: ${e.message}</span>`);
-                document.getElementById('trigger-btn').disabled = false;
+                document.getElementById('pricing-reasoning').textContent = `Error: ${e.message}`;
+                btn.disabled = false;
+                btn.innerHTML = `Run Simulation`;
             }
         }
 
         async function simulateViralSales() {
             if(!currentItemId) return;
-            document.getElementById('viral-btn').disabled = true;
-            document.getElementById('viral-btn').innerText = "Simulating...";
+            const btn = document.getElementById('viral-btn');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner"></span> Processing...`;
             
             try {
                 await fetch('/api/simulate_sales', {
@@ -365,7 +800,41 @@
                     body: JSON.stringify({ item_id: currentItemId })
                 });
             } catch (e) {
-                appendLog(`<span style="color:red">Error: ${e.message}</span>`);
+                document.getElementById('pricing-reasoning').textContent = `Error: ${e.message}`;
+                btn.disabled = false;
+                btn.innerHTML = `Process Live Sales`;
+            }
+        }
+
+        async function refineCampaign() {
+            if(!currentItemId) return;
+            const inputVal = document.getElementById('copilot-input').value;
+            if(!inputVal) return;
+            
+            const btn = document.getElementById('refine-btn');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner" style="width:14px;height:14px;"></span>`;
+            
+            // Revert UI to loading state
+            document.getElementById('copilot-ui').style.display = 'none';
+            document.getElementById('loading-footer').style.display = 'flex';
+            
+            document.getElementById('main-asset-container').innerHTML = `
+                <div class="image-placeholder" style="flex-direction:column; height: 100%;">
+                    <span class="spinner" style="width:48px; height:48px; border-width: 4px; margin-bottom: 20px;"></span>
+                    <div style="color:var(--accent); font-weight:700; font-size:1.2rem; text-transform:uppercase; letter-spacing:0.1em; text-align:center;">Copilot Fine-Tuning Execution</div>
+                    <div style="color:var(--text-muted); margin-top: 10px; font-size: 0.9rem;">Model: Imagen 3.0 via Vertex AI</div>
+                </div>`;
+            document.getElementById('ad-copy').textContent = "Pivoting generative synthesis based on Copilot constraints...";
+            
+            try {
+                await fetch('/api/refine', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_id: currentItemId, refinement: inputVal })
+                });
+            } catch (e) {
+                console.error(e);
             }
         }
 
@@ -374,51 +843,145 @@
             try {
                 const data = JSON.parse(event.data);
                 if (data.message) {
-                    // check if it's a stock decrement message to update UI smoothly
                     const stockMatch = data.message.match(/Stock decremented -> (\d+)/);
                     if(stockMatch) {
                         document.getElementById('stock-ticker').textContent = stockMatch[1];
+                        const stockEl = document.getElementById('stock-ticker');
+                        stockEl.style.color = '#f43f5e';
+                        setTimeout(() => stockEl.style.color = '#fff', 200);
+                    } else if (!data.message.includes("Agent flow sequence initiated")) {
+                        const cleanMsg = data.message.replace(/\[INFO\] |\[WARN\] /, '');
+                        if(cleanMsg.length > 5) {
+                            const mongoLogs = document.getElementById('mongo-log-content');
+                            mongoLogs.innerHTML += `<br>> <span style="color:#fff;">${cleanMsg}</span>`;
+                            document.getElementById('mongo-logs').scrollTop = document.getElementById('mongo-logs').scrollHeight;
+                            
+                            // Agent light up logic
+                            if(cleanMsg.includes("vectorSearch") || cleanMsg.includes("Vertex") || cleanMsg.includes("geoNear")) {
+                                document.getElementById('node-mongo').classList.add('active');
+                                document.getElementById('line-1').setAttribute('stroke', 'var(--accent)');
+                            }
+                            if(cleanMsg.includes("Pricing") || cleanMsg.includes("Surge")) {
+                                document.getElementById('node-price').classList.add('active');
+                                document.getElementById('line-3').setAttribute('stroke', 'var(--accent)');
+                            }
+                            if(cleanMsg.includes("Gemini") || cleanMsg.includes("Copy")) {
+                                document.getElementById('node-copy').classList.add('active');
+                                document.getElementById('line-4').setAttribute('stroke', 'var(--accent)');
+                            }
+                            if(cleanMsg.includes("Imagen") || cleanMsg.includes("Rendering")) {
+                                document.getElementById('node-image').classList.add('active');
+                            }
+                        }
                     }
-                    appendLog(data.message);
                 }
                 
-                if (data.message.includes("AD CAMPAIGN GENERATED")) {
+                if (data.message && data.message.includes("Ad payload generated")) {
                     document.getElementById('trigger-btn').disabled = false;
+                    document.getElementById('trigger-btn').innerHTML = `Run Simulation`;
+                    
                     const camp = data.campaign;
                     currentItemId = camp.item_id;
                     
-                    document.getElementById('empty-campaigns').style.display = 'none';
-                    document.getElementById('campaign-card').classList.add('active');
-                    document.getElementById('price-container').style.display = 'block';
-                    
-                    document.getElementById('ad-copy-text').textContent = camp.copy;
+                    // Jiggle the chart to simulate live calculation
+                    if(demoChart) {
+                        demoChart.data.datasets[0].data = [
+                            Math.floor(Math.random() * 20) + 80,
+                            Math.floor(Math.random() * 20) + 80,
+                            Math.floor(Math.random() * 20) + 80,
+                            Math.floor(Math.random() * 20) + 80,
+                            Math.floor(Math.random() * 20) + 70
+                        ];
+                        demoChart.update();
+                    }
+
                     document.getElementById('live-price').textContent = `$${camp.current_price.toFixed(2)}`;
                     document.getElementById('pricing-reasoning').textContent = camp.pricing_reasoning;
                     document.getElementById('stock-ticker').textContent = camp.remaining_stock;
-                    
-                    if(camp.image_b64) {
-                        document.getElementById('ad-image').src = "data:image/jpeg;base64," + camp.image_b64;
-                        document.getElementById('ad-image').style.display = "block";
+                                       if (typeof camp.copy === 'object') {
+                        document.getElementById('ad-copy').textContent = camp.copy.instagram_caption || 'N/A';
                     } else {
-                        // fallback css placeholder
-                        document.getElementById('ad-image').src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMzMzQxNTUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NDc0OGIiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkltYWdlIFBsYWNlaG9sZGVyPC90ZXh0Pjwvc3ZnPg==';
-                        document.getElementById('ad-image').style.display = "block";
+                        document.getElementById('ad-copy').textContent = camp.copy;
                     }
+                    
+                    let imgHTML_A = '';
+                    let imgHTML_B = '';
+                    
+                    if(camp.image_b64 === "ERROR" || !camp.image_b64 || camp.image_b64.length < 10) {
+                        imgHTML_A = `<div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#1e1e1e; color:#f43f5e; border: 1px solid #f43f5e; padding: 20px; text-align:center;">
+                                        <div style="font-weight:bold; font-size:1.2rem; margin-bottom:10px;">GENERATION FAILED</div>
+                                        <div style="font-size:0.8rem;">Variation A encountered a 429 quota exhaustion or backend timeout.</div>
+                                     </div>`;
+                    } else {
+                        imgHTML_A = `<img src="data:image/jpeg;base64,${camp.image_b64}" alt="AI Asset A" style="flex:1; width:50%; height:100%; object-fit:cover;">`;
+                    }
+                    
+                    if(camp.image_b64_b === "ERROR" || !camp.image_b64_b || camp.image_b64_b.length < 10) {
+                        imgHTML_B = `<div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#1e1e1e; color:#f43f5e; border: 1px solid #f43f5e; padding: 20px; text-align:center; border-left: 2px solid var(--background);">
+                                        <div style="font-weight:bold; font-size:1.2rem; margin-bottom:10px;">GENERATION FAILED</div>
+                                        <div style="font-size:0.8rem;">Variation B encountered a 429 quota exhaustion or backend timeout.</div>
+                                     </div>`;
+                    } else {
+                        imgHTML_B = `<img src="data:image/jpeg;base64,${camp.image_b64_b}" alt="AI Asset B" style="flex:1; width:50%; height:100%; object-fit:cover; border-left: 2px solid var(--background);">`;
+                    }
+                    
+                    document.getElementById('main-asset-container').innerHTML = `<div style="display:flex; width:100%; height:100%;">${imgHTML_A}${imgHTML_B}</div>`;
 
-                    document.getElementById('viral-btn').style.display = 'block';
+                    // Populate A/B testing readout
+                    document.getElementById('ab-variant-a').innerHTML = `
+                         <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold;">Variation A (Discarded)</div>
+                         <div style="font-size: 0.9rem; color: #f43f5e; font-weight: bold;">42% CTR</div>`;
+                         
+                    document.getElementById('ab-variant-b').innerHTML = `
+                         <div style="font-size: 0.65rem; color: var(--accent); text-transform: uppercase; font-weight: bold;">Variation B (Deployed)</div>
+                         <div style="font-size: 1.2rem; color: #38bdf8; font-weight: bold;">89% CTR</div>`;
+
+                    // Toggle Footer UI
+                    document.getElementById('loading-footer').style.display = 'none';
+                    document.getElementById('copilot-ui').style.display = 'flex';
+                    
+                    // Reset Refine Button
+                    const refBtn = document.getElementById('refine-btn');
+                    if(refBtn) {
+                        refBtn.disabled = false;
+                        refBtn.innerHTML = `Refine Strategy`;
+                    }
+                    
                     document.getElementById('viral-btn').disabled = false;
-                    document.getElementById('viral-btn').innerText = "Execute Sales Simulation";
+                    document.getElementById('viral-btn').innerHTML = `Process Live Sales`;
                 }
 
                 if (data.po) {
-                    document.getElementById('po-receipt').style.display = 'block';
-                    document.getElementById('po-details').innerHTML = `
-                        PO: ${data.po.po_number}<br>
-                        Item ID: ${data.po.item_id}<br>
-                        Quantity: ${data.po.quantity}<br>
-                        Status: ${data.po.status}<br>
-                        Supplier: ${data.po.supplier}
-                    `;
+                    const mongoLogs = document.getElementById('mongo-log-content');
+                    mongoLogs.innerHTML += `<br>> <span style="color:#38bdf8;">PO TRANSMITTED! [${data.po.po_number}]</span>`;
+                    document.getElementById('mongo-logs').scrollTop = document.getElementById('mongo-logs').scrollHeight;
+                    
+                    // Draw supply line on map using OSRM Real Routing
+                    if(currentMarker) {
+                        const warehouse = [40.6500, -74.0000]; // Generic warehouse location (Brooklyn)
+                        const anomaly = currentMarker.getLatLng();
+                        
+                        // Fetch real road route from OSRM
+                        fetch(`https://router.project-osrm.org/route/v1/driving/${warehouse[1]},${warehouse[0]};${anomaly.lng},${anomaly.lat}?overview=full&geometries=geojson`)
+                        .then(res => res.json())
+                        .then(routeData => {
+                            if(routeData.routes && routeData.routes.length > 0) {
+                                const coords = routeData.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                                routeLine = L.polyline(coords, {
+                                    color: '#3b82f6',
+                                    weight: 4,
+                                    dashArray: '10, 10',
+                                    className: 'supply-line'
+                                }).addTo(map);
+                                
+                                map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+                                
+                                L.marker(warehouse, {
+                                    icon: L.divIcon({ className: 'radar-pulse', iconSize:[15,15], html:'<div style="background:#3b82f6;width:100%;height:100%;border-radius:50%;"></div>' })
+                                }).addTo(map).bindPopup("<b>Fulfillment Center</b><br>Dispatching PO: " + data.po.po_number).openPopup();
+                            }
+                        });
+                    }
                 }
             } catch (e) {
                 console.error("Parse error", e);

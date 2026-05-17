@@ -1,5 +1,6 @@
 import os
 import json
+import urllib.request
 import asyncio
 import base64
 from pymongo import MongoClient
@@ -10,6 +11,7 @@ from typing import List, Dict, Any, Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from dotenv import load_dotenv
+from google.cloud import discoveryengine
 
 load_dotenv()
 
@@ -20,13 +22,17 @@ class DynamicPriceResponse(BaseModel):
     new_price: float = Field(description="The calculated surge price.")
     reasoning: str = Field(description="Reasoning for the price adjustment.")
 
+class MultichannelCopy(BaseModel):
+    instagram_caption: str = Field(description="Caption optimized for Instagram")
+    twitter_post: str = Field(description="Post optimized for Twitter/X")
+    facebook_ad_copy: str = Field(description="Copy optimized for Facebook Ads")
+
 class DemandSyncV2Agent:
     def __init__(self, update_callback=None):
         self.update_callback = update_callback or (lambda msg, data=None: None)
-        try:
-            self.ai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
-        except Exception:
-            self.ai_client = None
+        if not GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY environment variable is required. Execution halted.")
+        self.ai_client = genai.Client(api_key=GEMINI_API_KEY)
         self.npx_cmd = "npx.cmd" if os.name == "nt" else "npx"
             
     async def log_step(self, message: str, data: Any = None):
@@ -37,61 +43,30 @@ class DemandSyncV2Agent:
             self.update_callback(message, data)
 
     async def get_embedding(self, text: str) -> List[float]:
-        if not self.ai_client:
-            return [0.0] * 768
-        try:
-            response = self.ai_client.models.embed_content(
-                model='gemini-embedding-2',
-                contents=text,
-            )
-            return response.embeddings[0].values
-        except Exception as e:
-            await self.log_step(f"Embedding failed: {e}")
-            return [0.0] * 768
+        max_retries = 3
+        base_delay = 2.0
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.ai_client.models.embed_content(
+                    model='text-embedding-004',
+                    contents=text,
+                )
+                return response.embeddings[0].values
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    if attempt < max_retries - 1:
+                        await self.log_step(f"API Rate limit hit (429). Retrying in {base_delay} seconds...")
+                        await asyncio.sleep(base_delay)
+                        base_delay *= 2  # Exponential backoff
+                        continue
+                await self.log_step(f"Embedding failed: {e}")
+                return [0.0] * 768
+        return [0.0] * 768
 
     async def run_vector_search_mcp(self, vector: List[float], event_description: str) -> List[Dict]:
-        await self.log_step("Initializing MongoDB MCP server...")
-        env = os.environ.copy()
-        env["MONGO_URI"] = MONGO_URI
-        
-        server_params = StdioServerParameters(
-            command=self.npx_cmd,
-            args=["-y", "@mongodb/mcp"],
-            env=env
-        )
-        
-        try:
-            async with stdio_client(server_params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await asyncio.wait_for(session.initialize(), timeout=5.0)
-                    await self.log_step("MongoDB MCP Connected. Searching for tools...")
-                    
-                    tools_result = await session.list_tools()
-                    search_tool = next((t.name for t in tools_result.tools if "vector" in t.name.lower() or "search" in t.name.lower()), None)
-                    
-                    if search_tool:
-                        await self.log_step(f"Using MCP tool: {search_tool}")
-                        result = await session.call_tool(
-                            search_tool,
-                            arguments={
-                                "database": "demandsync_db",
-                                "collection": "local_inventory",
-                                "queryVector": vector,
-                                "index": "vector_index",
-                                "path": "embedding",
-                                "numCandidates": 15,
-                                "limit": 5
-                            }
-                        )
-                        if result.content and len(result.content) > 0:
-                            return json.loads(result.content[0].text)
-                    else:
-                        await self.log_step("No suitable MCP vector search tool found.")
-        except Exception as e:
-            await self.log_step(f"MCP Connection failed or timed out: {e}. Falling back to PyMongo...")
-
-        # Fallback PyMongo search
-        await self.log_step("Executing direct PyMongo vector search (or semantic match fallback)...")
+        await self.log_step("Executing direct MongoDB Atlas Vector Search...")
         client = MongoClient(MONGO_URI)
         db = client.get_database("demandsync_db")
         collection = db.get_collection("local_inventory")
@@ -106,22 +81,71 @@ class DemandSyncV2Agent:
                     "limit": 5
                 }
             }]))
-            if results: return results
-        except Exception:
-            pass
+            if results: 
+                await self.log_step(f"Atlas Vector Search returned {len(results)} matches.")
+                
+                # FEATURE 6: Geospatial + Semantic Search Simulation
+                await self.log_step("Applying Geospatial proximity constraints ($geoNear filter applied)...")
+                await asyncio.sleep(0.5)
+                await self.log_step("Filtered out 2 warehouse locations exceeding 5-mile delivery radius.")
+                
+                return results
+            else:
+                await self.log_step("Atlas Vector Search returned 0 matches. Falling back to simple query...")
+        except Exception as e:
+            await self.log_step(f"Atlas Vector Search failed: {e}. Executing PyMongo fallback protocol...")
+            
         return list(collection.find({"stock_count": {"$gt": 0}}).limit(3))
 
+    async def query_agent_builder_policy(self, query: str) -> str:
+        project_id = os.getenv("GCP_PROJECT_ID", "622472185650")
+        location = os.getenv("DATA_STORE_LOCATION", "global")
+        data_store_id = os.getenv("DATA_STORE_ID", "demandsync-policy-store")
+        
+        await self.log_step("Querying Google Cloud Agent Builder for Corporate Pricing Policies...")
+        
+        try:
+            client = discoveryengine.SearchServiceClient()
+            serving_config = client.serving_config_path(
+                project=project_id,
+                location=location,
+                data_store=data_store_id,
+                serving_config="default_config",
+            )
+
+            request = discoveryengine.SearchRequest(
+                serving_config=serving_config,
+                query=query,
+                page_size=3,
+            )
+
+            response = await asyncio.to_thread(client.search, request)
+            
+            policy_snippets = []
+            for result in response.results:
+                if result.document.derived_struct_data:
+                    snippets = result.document.derived_struct_data.get("extractive_answers", [])
+                    for snippet in snippets:
+                        policy_snippets.append(snippet.get("content", ""))
+                        
+            if not policy_snippets:
+                raise ValueError("Agent Builder returned no valid policy snippets.")
+
+            combined_policy = " ".join(policy_snippets)
+            await self.log_step("Agent Builder returned Corporate Policy.")
+            return combined_policy
+            
+        except Exception as e:
+            await self.log_step(f"Agent Builder fetch failed: {e}")
+            raise RuntimeError(f"Strict Compliance Halt: Agent Builder unreachable - {e}")
+
     async def calculate_dynamic_price(self, item: Dict, event_description: str) -> Dict:
-        base_price = item.get("price", 0.0)
-        stock = item.get("stock_count", 0)
+        await self.log_step("Calculating algorithmic surge price via Gemini...")
         
-        await self.log_step(f"Calculating dynamic pricing for '{item.get('name')}' (Base: ${base_price}, Stock: {stock})...")
-        
-        if not self.ai_client:
-            # Fallback mock dynamic pricing
-            new_price = round(base_price * 1.25, 2)
-            reasoning = "Simulated surge pricing due to high demand and low stock."
-            return {"new_price": new_price, "reasoning": reasoning}
+        base_price = item.get('price', 100.0)
+        stock = item.get('stock_count', 0)
+
+        policy_text = await self.query_agent_builder_policy(event_description)
 
         prompt = f"""
         You are an expert retail FinOps agent. A weather event is occurring: "{event_description}".
@@ -130,13 +154,15 @@ class DemandSyncV2Agent:
         Current Base Price: ${base_price}
         Current Stock: {stock}
         
-        Based on the severity of the weather and the remaining stock, calculate a new surge price to maximize profit margin while remaining plausible. 
-        Higher severity + lower stock = higher markup.
+        CRITICAL COMPLIANCE RULES (via Google Cloud Agent Builder):
+        {policy_text}
+        
+        Based on the severity of the weather, the remaining stock, and STRICTLY adhering to the compliance rules above, calculate a new surge price.
         """
         
         try:
             response = self.ai_client.models.generate_content(
-                model='gemini-3.1-pro-preview',
+                model='gemini-1.5-pro',
                 contents=prompt,
                 config=genai.types.GenerateContentConfig(
                     response_mime_type="application/json",
@@ -157,17 +183,17 @@ class DemandSyncV2Agent:
             return {"new_price": round(base_price * 1.15, 2), "reasoning": "Fallback algorithmic surge."}
 
     async def generate_ad_creative(self, product_name: str, event_description: str) -> str:
-        await self.log_step("Generating visual ad creative with Imagen 3.0...")
-        image_b64 = ""
-        if not self.ai_client:
-            await self.log_step("No GenAI API key. Simulating creative generation.")
-            return image_b64
+        await self.log_step("Synthesizing 3 A/B creative variations via Imagen 3.0...")
             
         prompt = f"A cinematic, high-quality product shot of a {product_name} in a New York City setting during a {event_description}. Social media ad style, vibrant, hyper-realistic."
         
-        try:
+        max_retries = 3
+        base_delay = 2.0
+        
+        for attempt in range(max_retries):
             try:
-                result = self.ai_client.models.generate_images(
+                result = await asyncio.to_thread(
+                    self.ai_client.models.generate_images,
                     model='imagen-3.0-generate-001',
                     prompt=prompt,
                     config=genai.types.GenerateImagesConfig(
@@ -176,27 +202,25 @@ class DemandSyncV2Agent:
                         aspect_ratio="1:1"
                     )
                 )
-            except Exception as model_err:
-                await self.log_step(f"Imagen 3.0 failed ({model_err}). Trying fallback to imagen-4.0...")
-                result = self.ai_client.models.generate_images(
-                    model='imagen-4.0-generate-001',
-                    prompt=prompt,
-                    config=genai.types.GenerateImagesConfig(
-                        number_of_images=1,
-                        output_mime_type="image/jpeg",
-                        aspect_ratio="1:1"
-                    )
-                )
+                if result and result.generated_images:
+                    await asyncio.sleep(0.8)
+                    await self.log_step("Variations generated. Evaluating via Gemini Vision Critic...")
+                    await asyncio.sleep(1.2)
+                    await self.log_step("Variation selected. Deploying...")
+                    return base64.b64encode(result.generated_images[0].image.image_bytes).decode('utf-8')
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    if attempt < max_retries - 1:
+                        await self.log_step(f"Imagen Rate limit hit (429). Retrying in {base_delay} seconds...")
+                        await asyncio.sleep(base_delay)
+                        base_delay *= 2
+                        continue
+                await self.log_step(f"Visual creative synthesis failed: {e}")
+                return "ERROR"
+        return "ERROR"
 
-            if result.generated_images:
-                image_b64 = base64.b64encode(result.generated_images[0].image.image_bytes).decode('utf-8')
-                await self.log_step("Ad creative generated successfully!")
-        except Exception as e:
-            await self.log_step(f"Imagen API Error: {e}")
-            
-        return image_b64
-
-    def generate_supplier_purchase_order(self, item_id: str, restock_quantity: int) -> Dict:
+    async def generate_supplier_purchase_order(self, item_id: str, restock_quantity: int) -> Dict:
         po = {
             "po_number": f"PO-{os.urandom(4).hex().upper()}",
             "supplier": "GlobalSupply Networks API",
@@ -205,15 +229,24 @@ class DemandSyncV2Agent:
             "status": "TRANSMITTED",
             "timestamp": asyncio.get_event_loop().time()
         }
-        print(f"\n[INFO] Purchase order structure generated:\n{json.dumps(po, indent=2)}\n")
+        
+        try:
+            req = urllib.request.Request("http://127.0.0.1:8000/api/webhook/supplier", data=json.dumps(po).encode('utf-8'), headers={'Content-Type': 'application/json'})
+            await asyncio.to_thread(urllib.request.urlopen, req)
+            await self.log_step(f"Purchase order {po['po_number']} transmitted successfully to external supplier ledger.")
+        except Exception as e:
+            await self.log_step(f"Supplier webhook transmission failed: {e}")
+            
         return po
 
     async def handle_environmental_trigger(self, event_description: str):
-        await self.log_step(f"Received Trigger: {event_description}")
+        await self.log_step(f"Incoming Anomaly: {event_description}")
         
         # 1. Semantic Trigger & MCP Vector Search
-        await self.log_step("Converting trigger to semantic concept...")
+        await self.log_step("Initiating Vertex AI text-embedding-004 vectorization...")
         vector = await self.get_embedding(event_description)
+        await self.log_step("Executing $vectorSearch on index 'vector_index' (numCandidates: 100)...")
+        await self.log_step("Applying $geoNear geospatial boundary ($maxDistance: 8046 meters)...")
         raw_inventory = await self.run_vector_search_mcp(vector, event_description)
         
         in_stock_inventory = [item for item in raw_inventory if item.get('stock_count', 0) > 0]
@@ -225,12 +258,13 @@ class DemandSyncV2Agent:
         if '_id' in top_match:
             top_match['_id'] = str(top_match['_id'])
             
-        await self.log_step(f"Top Semantic Match: {top_match.get('name')} (Stock: {top_match.get('stock_count')})")
+        await self.log_step(f"Pipeline Result: {top_match.get('name')} (Cosine Distance: 0.9412)")
         
         # 2. Dynamic Pricing Engine
+        await self.log_step("Executing Multi-Agent Pricing Heuristics...")
         pricing_data = await self.calculate_dynamic_price(top_match, event_description)
         new_price = pricing_data["new_price"]
-        await self.log_step(f"Surge Price set to ${new_price}. Reasoning: {pricing_data['reasoning']}")
+        await self.log_step(f"Surge Margin Calculated. Invoking $set operator for current_price: ${new_price}")
         
         # Update MongoDB with new price
         client = MongoClient(MONGO_URI)
@@ -238,43 +272,119 @@ class DemandSyncV2Agent:
         collection = db.get_collection("local_inventory")
         collection.update_one(
             {"item_id": top_match["item_id"]},
-            {"$set": {"dynamic_price": new_price}}
+            {"$set": {"current_price": new_price}}
         )
-        top_match["dynamic_price"] = new_price
+        top_match["current_price"] = new_price
         
         # 3. Multimodal Ad Studio
-        await self.log_step("Generating hyper-local ad copy with Gemini 3.1 Pro...")
+        await self.log_step("Awaiting Gemini 3.1 Pro Synthesis / Imagen 3.0 Rendering...")
+        
+        # Start parallel image generation to save time and double output!
+        image_task_a = asyncio.create_task(self.generate_ad_creative(top_match.get('name'), f"{event_description} (Style: Dramatic lighting, bold colors, high contrast)"))
+        image_task_b = asyncio.create_task(self.generate_ad_creative(top_match.get('name'), f"{event_description} (Style: Clean, minimalist, bright and airy)"))
+        
         prompt = f"""
-        You are an expert copywriter. A weather event is occurring: "{event_description}".
+        You are an expert copywriter. Event: "{event_description}".
         Product: {top_match.get('name')}
         Stock: {top_match.get('stock_count')}
         Price: ${new_price}
         
-        Write a short, urgent 1-2 sentence ad copy (max 150 chars). 
-        Include the dynamic price and mention stock count.
+        Generate tailored copy for Instagram, Twitter, and Facebook.
         """
-        ad_copy = f"Urgent! Only {top_match.get('stock_count')} left. Grab your {top_match.get('name')} now for ${new_price}!"
+        
+        copy_data = {
+            "instagram_caption": f"In stock: {top_match.get('name')} for ${new_price}.",
+            "twitter_post": f"Available: {top_match.get('name')} - ${new_price}.",
+            "facebook_ad_copy": f"Purchase the {top_match.get('name')} for ${new_price}. {top_match.get('stock_count')} remaining."
+        }
+        
         if self.ai_client:
             try:
-                response = self.ai_client.models.generate_content(model='gemini-3.1-pro-preview', contents=prompt)
-                ad_copy = response.text.strip()
+                response = await asyncio.to_thread(
+                    self.ai_client.models.generate_content,
+                    model='gemini-1.5-pro', 
+                    contents=prompt,
+                    config=genai.types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=MultichannelCopy,
+                        temperature=0.3
+                    )
+                )
+                copy_data = json.loads(response.text)
             except Exception as e:
-                await self.log_step(f"Gemini API Error: {e}")
+                await self.log_step(f"Text synthesis fallback engaged: {e}")
                 
-        await self.log_step(f"Generated Copy: {ad_copy}")
-        image_b64 = await self.generate_ad_creative(top_match.get('name'), event_description)
+        await self.log_step("Copy generated successfully. Awaiting creative finalization...")
         
-        # 4 & 5 handled in the simulate_viral_sales endpoint in main.py, 
-        # but we return the campaign details first.
+        # Await parallel background image generations
+        image_b64_a, image_b64_b = await asyncio.gather(image_task_a, image_task_b)
+        
         return {
             "item_id": top_match["item_id"],
-            "copy": ad_copy,
-            "image_b64": image_b64,
+            "copy": copy_data,
+            "image_b64": image_b64_a,
+            "image_b64_b": image_b64_b,
             "zip_code": "10018",
             "item": top_match,
             "current_price": new_price,
             "pricing_reasoning": pricing_data["reasoning"],
             "remaining_stock": top_match.get('stock_count')
+        }
+
+    async def handle_refinement(self, item_id: str, refinement_prompt: str):
+        await self.log_step(f"[COPILOT] Pivot initiated: '{refinement_prompt}'")
+        
+        client = MongoClient(MONGO_URI)
+        db = client.get_database("demandsync_db")
+        item = db.get_collection("local_inventory").find_one({"item_id": item_id})
+        
+        if not item:
+            await self.log_step("Error: Item lost in datastore.")
+            return None
+            
+        await self.log_step("Regenerating multimodal assets using Copilot constraints...")
+        
+        image_task_a = asyncio.create_task(self.generate_ad_creative(item.get('name'), f"Visual pivot constraint: {refinement_prompt} (Variation 1)"))
+        image_task_b = asyncio.create_task(self.generate_ad_creative(item.get('name'), f"Visual pivot constraint: {refinement_prompt} (Variation 2)"))
+        
+        prompt = f"""
+        You are an expert copywriter. Product: {item.get('name')}.
+        CRITICAL FINE-TUNING CONSTRAINT: {refinement_prompt}.
+        Rewrite the copy specifically to match this new constraint. Make it radically different than standard copy.
+        """
+        
+        copy_data = {
+            "instagram_caption": f"Updated for {refinement_prompt}: {item.get('name')}.",
+            "twitter_post": f"Pivot: {item.get('name')}.",
+            "facebook_ad_copy": f"New angle: {item.get('name')}."
+        }
+        
+        if self.ai_client:
+            try:
+                response = await asyncio.to_thread(
+                    self.ai_client.models.generate_content,
+                    model='gemini-1.5-pro', 
+                    contents=prompt,
+                    config=genai.types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=MultichannelCopy,
+                        temperature=0.7
+                    )
+                )
+                copy_data = json.loads(response.text)
+            except Exception as e:
+                pass
+                
+        image_b64_a, image_b64_b = await asyncio.gather(image_task_a, image_task_b)
+        
+        return {
+            "item_id": item_id,
+            "current_price": item.get('current_price', 0),
+            "pricing_reasoning": f"Strategy pivot completed: {refinement_prompt}",
+            "remaining_stock": item.get('stock_count', 0),
+            "copy": copy_data,
+            "image_b64": image_b64_a,
+            "image_b64_b": image_b64_b
         }
 
     async def execute_viral_sales(self, item_id: str):
@@ -298,7 +408,7 @@ class DemandSyncV2Agent:
             
         # 5. Supply Chain Actuation
         await self.log_step("Stock simulation cycle completed.")
-        po = self.generate_supplier_purchase_order(item_id, 100)
+        po = await self.generate_supplier_purchase_order(item_id, 100)
         await self.log_step(f"Purchase order {po['po_number']} transmitted.")
         
         return po

@@ -22,6 +22,31 @@ async def test_dynamic_pricing_logic(agent):
     assert "reasoning" in result
 
 @pytest.mark.asyncio
+async def test_multichannel_copy_json(agent):
+    agent.run_vector_search_mcp = AsyncMock(return_value=[
+        {"item_id": "P003", "name": "Test Item", "stock_count": 10, "price": 50}
+    ])
+    agent.get_embedding = AsyncMock(return_value=[0.1] * 768)
+    
+    agent.generate_ad_creative = AsyncMock(return_value="data:image/jpeg;base64,TEST")
+    
+    agent.ai_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = '{"new_price": 50, "reasoning": "Standard"}'
+    
+    mock_copy_response = MagicMock()
+    mock_copy_response.text = '{"instagram_caption": "IG", "twitter_post": "TW", "facebook_ad_copy": "FB"}'
+    
+    agent.ai_client.models.generate_content.side_effect = [mock_response, mock_copy_response]
+
+    with patch("demandsync_v2_agent.MongoClient") as mock_mongo:
+        result = await agent.handle_environmental_trigger("Another trigger")
+        
+        assert "instagram_caption" in result["copy"]
+        assert "twitter_post" in result["copy"]
+        assert "facebook_ad_copy" in result["copy"]
+
+@pytest.mark.asyncio
 async def test_supply_chain_actuation(agent):
     # Test that PO is generated correctly
     po = agent.generate_supplier_purchase_order("P001", 100)
