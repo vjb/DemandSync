@@ -1,0 +1,59 @@
+Devpost
+Join a hackathon 
+Host a hackathon 
+Resources 
+Log in
+Sign up
+Google Cloud Rapid Agent Hackathon
+Deadline: Jun 11, 2026 @ 5:00pm EDT 
+Join hackathon
+Google Cloud Rapid Agent Hackathon
+Overview
+My projects
+Participants (6596)
+Resources
+Rules
+Project gallery
+Updates
+Discussions
+FAQ
+About MongoDB
+
+Explore the power of MongoDB's intelligent data platform to build innovative AI-driven solutions for real-world impact. MongoDB Atlas serves as the unified operational foundation and persistent memory layer for modern AI and agentic workloads. By combining operational, vector, and semantic data on a single platform, it eliminates the fragmented stacks and memory barriers that hinder AI performance. Ultimately, it empowers businesses to build production-grade AI that reasons accurately while remaining completely framework-agnostic.
+
+Resources
+
+Load the sample Mflix Dataset: Quickly spin up sample data to kickstart your project, sample_mflix.embedded_movies already contains vector embeddings for Vector Search! Or BYO embedding model and dataset(Embedding model should be one of MongoDB provided or Google provided).
+Data Modelling in MongoDB: Learn best practices for structuring your data.
+MongoDB MCP Server: Explore MongoDB MCP server to connect your database to LLM. 
+MongoDB Tools: Explore essential tools to optimize your development workflow.
+MongoDB Aggregations: Master data processing and analysis with powerful aggregation pipelines.
+MongoDB Atlas Search: Build lightning-fast search experiences directly within your database.
+MongoDB Vector Search: Supercharge your apps with AI-driven search capabilities.
+AI Learning Hub: Dive into AI with MongoDB—guides, tutorials, and more.
+Voyage AI documentation: Learn how to use MongoDB Voyage AI to generate embeddings.
+Devpost
+About
+Careers
+Contact
+Help
+Hackathons
+Browse hackathons
+Explore projects
+Host a hackathon
+Hackathon guides
+Portfolio
+Your projects
+Your hackathons
+Settings
+Connect
+ Twitter
+ Discord
+ Facebook
+ LinkedIn
+© 2026 Devpost, Inc. All rights reserved.
+Community guidelines
+Security
+CA notice
+Privacy policy
+Terms of service

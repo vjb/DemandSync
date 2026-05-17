@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniCaster | Autonomous Micro-Ad Agent</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-color: #f8fafc;
+            --accent: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --success: #10b981;
+            --border: #334155;
+            --terminal-bg: #000000;
+            --terminal-text: #22c55e;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 1rem 2rem;
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            background-color: var(--accent);
+            color: var(--bg-color);
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .panel {
+            background-color: var(--panel-bg);
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            background-color: rgba(0,0,0,0.2);
+        }
+
+        .panel-body {
+            padding: 1rem;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+            display: block;
+            margin-bottom: 1rem;
+        }
+
+        .btn:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .event-card {
+            background-color: rgba(56, 189, 248, 0.1);
+            border: 1px solid var(--accent);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Terminal Logs */
+        .terminal {
+            background-color: var(--terminal-bg);
+            color: var(--terminal-text);
+            font-family: 'Courier New', Courier, monospace;
+            padding: 1rem;
+            font-size: 0.9rem;
+            height: 100%;
+            box-sizing: border-box;
+        }
+        
+        .log-line {
+            margin-bottom: 0.25rem;
+        }
+        
+        .log-time {
+            color: #64748b;
+            margin-right: 0.5rem;
+        }
+
+        /* Campaign Card */
+        .campaign-card {
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            display: none;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .campaign-card.active {
+            display: flex;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .campaign-title {
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin: 0;
+        }
+
+        .ad-copy-box {
+            background-color: rgba(255,255,255,0.05);
+            padding: 1rem;
+            border-left: 4px solid var(--accent);
+            font-style: italic;
+            font-size: 1.1rem;
+            line-height: 1.5;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .stat-box {
+            background-color: rgba(0,0,0,0.2);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--success);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .empty-state {
+            color: #64748b;
+            text-align: center;
+            padding: 2rem;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>OmniCaster <span class="badge">AGENT ACTIVE</span></h1>
+        <div>Google Cloud Rapid Agent Hackathon</div>
+    </header>
+
+    <div class="container">
+        <!-- Column 1: Environment Feed -->
+        <div class="panel">
+            <div class="panel-header">Environment Feed</div>
+            <div class="panel-body">
+                <div class="event-card">
+                    <h3 style="margin-top:0;">Trigger Event Simulator</h3>
+                    <p style="font-size:0.9rem; color:#cbd5e1; margin-bottom: 1.5rem;">Simulate real-time webhook events from weather or social APIs.</p>
+                    <button class="btn" onclick="triggerEvent('Sudden severe thunderstorm warning in Midtown Manhattan')">
+                        ⛈️ Trigger Midtown Downpour
+                    </button>
+                    <button class="btn" style="background-color: #f59e0b;" onclick="triggerEvent('Extreme heat wave warning in Downtown Brooklyn')">
+                        🔥 Trigger Heat Wave
+                    </button>
+                    <button class="btn" style="background-color: #64748b;" onclick="triggerEvent('Blizzard warning across Central Park')">
+                        ❄️ Trigger Snowstorm
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Column 2: Agent Logs -->
+        <div class="panel">
+            <div class="panel-header">Agent Internal Reasoner (MCP Logs)</div>
+            <div class="panel-body" style="padding:0; background:black;">
+                <div class="terminal" id="terminal">
+                    <div class="log-line">OmniCaster OS v1.0 initialized.</div>
+                    <div class="log-line">Awaiting environmental triggers...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Column 3: Active Campaigns -->
+        <div class="panel">
+            <div class="panel-header">Active Campaigns</div>
+            <div class="panel-body">
+                
+                <div id="empty-campaigns" class="empty-state">
+                    No active campaigns. Waiting for agent deployment...
+                </div>
+
+                <div id="campaign-card" class="campaign-card">
+                    <h3 class="campaign-title">Deployed Geo-Fenced Ad</h3>
+                    <div class="ad-copy-box" id="ad-copy-text">
+                        Loading copy...
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value" id="target-zip">---</div>
+                            <div class="stat-label">Target Zip</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="stock-count">--</div>
+                            <div class="stat-label">Stock Remaining</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const campaignCard = document.getElementById('campaign-card');
+        const emptyState = document.getElementById('empty-campaigns');
+
+        function appendLog(message) {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            const line = document.createElement('div');
+            line.className = 'log-line';
+            line.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        async function triggerEvent(desc) {
+            appendLog(`> Sending trigger: "${desc}"`);
+            try {
+                await fetch('/api/trigger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ event_description: desc })
+                });
+            } catch (e) {
+                appendLog(`<span style="color:red">Error sending trigger: ${e.message}</span>`);
+            }
+        }
+
+        // Setup SSE for logs
+        const eventSource = new EventSource('/api/logs');
+        
+        eventSource.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.message) {
+                    appendLog(data.message);
+                }
+                
+                // If it contains campaign data, update UI
+                if (data.campaign) {
+                    emptyState.style.display = 'none';
+                    campaignCard.classList.add('active');
+                    
+                    document.getElementById('ad-copy-text').textContent = `"${data.campaign.copy}"`;
+                    document.getElementById('target-zip').textContent = data.campaign.zip_code;
+                    document.getElementById('stock-count').textContent = data.campaign.remaining_stock;
+                }
+            } catch (e) {
+                console.error("Parse error", e);
+            }
+        };
+        
+        eventSource.onerror = function() {
+            console.log("SSE disconnected. Reconnecting...");
+        };
+    </script>
+</body>
+</html>
