@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OmniCaster | Autonomous Micro-Ad Agent</title>
+    <title>DemandSync | Retail Orchestrator</title>
     <style>
         :root {
-            --bg-color: #0f172a;
+            --bg-color: #0b1120;
             --panel-bg: #1e293b;
             --text-color: #f8fafc;
-            --accent: #38bdf8;
-            --accent-hover: #0ea5e9;
-            --success: #10b981;
+            --accent: #06b6d4;
+            --accent-hover: #0891b2;
+            --surge: #ef4444;
+            --success: #22c55e;
             --border: #334155;
             --terminal-bg: #000000;
             --terminal-text: #22c55e;
@@ -41,26 +42,31 @@
         header h1 {
             margin: 0;
             font-size: 1.5rem;
-            font-weight: 700;
+            font-weight: 800;
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            background: linear-gradient(90deg, #06b6d4, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .badge {
-            background-color: var(--accent);
-            color: var(--bg-color);
+            background-color: rgba(6, 182, 212, 0.2);
+            color: #06b6d4;
             padding: 0.2rem 0.5rem;
             border-radius: 0.25rem;
             font-size: 0.8rem;
             font-weight: bold;
+            -webkit-text-fill-color: initial;
+            border: 1px solid #06b6d4;
         }
 
         .container {
             display: grid;
-            grid-template-columns: 1fr 2fr 1fr;
-            gap: 1.5rem;
-            padding: 1.5rem;
+            grid-template-columns: 1fr 1.5fr 1.5fr 1fr;
+            gap: 1rem;
+            padding: 1rem;
             flex: 1;
             overflow: hidden;
         }
@@ -79,6 +85,11 @@
             border-bottom: 1px solid var(--border);
             font-weight: 600;
             background-color: rgba(0,0,0,0.2);
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+            display: flex;
+            justify-content: space-between;
         }
 
         .panel-body {
@@ -87,31 +98,53 @@
             overflow-y: auto;
         }
 
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+        }
+
+        .select-input {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #0f172a;
+            color: white;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            outline: none;
+            cursor: pointer;
+        }
+
         .btn {
-            background-color: var(--accent);
+            background: linear-gradient(90deg, #3b82f6, #06b6d4);
             color: white;
             border: none;
-            padding: 0.75rem 1.5rem;
+            padding: 1rem;
             border-radius: 0.5rem;
-            font-size: 1rem;
-            font-weight: 600;
+            font-size: 0.9rem;
+            font-weight: 700;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: all 0.2s;
             width: 100%;
             display: block;
-            margin-bottom: 1rem;
+            text-transform: uppercase;
         }
 
         .btn:hover {
-            background-color: var(--accent-hover);
+            opacity: 0.9;
+            transform: translateY(-1px);
         }
 
-        .event-card {
-            background-color: rgba(56, 189, 248, 0.1);
-            border: 1px solid var(--accent);
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
+        .btn-surge {
+            background: linear-gradient(90deg, #ef4444, #f97316);
+            margin-top: 1rem;
+            display: none;
         }
 
         /* Terminal Logs */
@@ -120,177 +153,194 @@
             color: var(--terminal-text);
             font-family: 'Courier New', Courier, monospace;
             padding: 1rem;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             height: 100%;
             box-sizing: border-box;
         }
         
         .log-line {
             margin-bottom: 0.25rem;
-        }
-        
-        .log-time {
-            color: #64748b;
-            margin-right: 0.5rem;
+            word-wrap: break-word;
         }
 
-        /* Campaign Card */
+        /* Ad Creative */
         .campaign-card {
-            background: linear-gradient(145deg, #1e293b, #0f172a);
-            border: 1px solid var(--border);
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            background: #ffffff;
+            color: #000;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
             display: none;
             flex-direction: column;
-            gap: 1rem;
         }
+        .campaign-card.active { display: flex; animation: fadeIn 0.5s ease-out; }
 
-        .campaign-card.active {
-            display: flex;
-            animation: fadeIn 0.5s ease-out;
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .ig-header { padding: 0.75rem 1rem; display: flex; align-items: center; border-bottom: 1px solid #e2e8f0; }
+        .ig-avatar { width: 32px; height: 32px; border-radius: 50%; background: #06b6d4; margin-right: 0.75rem; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem; }
+        .ig-brand { font-weight: 600; font-size: 0.9rem; }
+        .ig-image-container { width: 100%; aspect-ratio: 1 / 1; background-color: #f1f5f9; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .ig-image-container img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        .ig-footer { padding: 1rem; }
+        .ig-caption { font-size: 0.95rem; line-height: 1.4; margin-bottom: 0.75rem; }
 
-        .campaign-title {
-            color: var(--accent);
-            font-weight: 700;
-            font-size: 1.1rem;
-            margin: 0;
-        }
-
-        .ad-copy-box {
-            background-color: rgba(255,255,255,0.05);
+        .live-price-container {
+            margin-top: 1rem;
             padding: 1rem;
-            border-left: 4px solid var(--accent);
-            font-style: italic;
-            font-size: 1.1rem;
-            line-height: 1.5;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
-
-        .stat-box {
-            background-color: rgba(0,0,0,0.2);
-            padding: 0.75rem;
+            background: #1e293b;
             border-radius: 0.5rem;
+            border: 1px solid var(--border);
             text-align: center;
         }
 
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: bold;
+        .live-price {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: var(--surge);
+            text-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { text-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
+            50% { text-shadow: 0 0 25px rgba(239, 68, 68, 0.8); }
+            100% { text-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
+        }
+
+        /* Supply Chain */
+        .stock-ticker {
+            font-size: 4rem;
+            font-weight: 900;
+            text-align: center;
+            margin: 2rem 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .po-receipt {
+            background: rgba(34, 197, 94, 0.1);
+            border: 2px solid var(--success);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 2rem;
+            display: none;
             color: var(--success);
         }
 
-        .stat-label {
-            font-size: 0.8rem;
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+        .po-receipt h3 {
+            margin: 0 0 0.5rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
-        
-        .empty-state {
-            color: #64748b;
-            text-align: center;
-            padding: 2rem;
-            font-style: italic;
-        }
+
+        .empty-state { color: #64748b; text-align: center; padding: 4rem 2rem; font-style: italic; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>OmniCaster <span class="badge">AGENT ACTIVE</span></h1>
-        <div>Google Cloud Rapid Agent Hackathon</div>
+        <h1>DemandSync <span class="badge">ORCHESTRATOR</span></h1>
     </header>
 
     <div class="container">
-        <!-- Column 1: Environment Feed -->
+        <!-- Column 1: Triggers -->
         <div class="panel">
-            <div class="panel-header">Environment Feed</div>
+            <div class="panel-header">1. Semantic Triggers</div>
             <div class="panel-body">
-                <div class="event-card">
-                    <h3 style="margin-top:0;">Trigger Event Simulator</h3>
-                    <p style="font-size:0.9rem; color:#cbd5e1; margin-bottom: 1.5rem;">Simulate real-time webhook events from weather or social APIs.</p>
-                    <button class="btn" onclick="triggerEvent('Sudden severe thunderstorm warning in Midtown Manhattan')">
-                        ⛈️ Trigger Midtown Downpour
-                    </button>
-                    <button class="btn" style="background-color: #f59e0b;" onclick="triggerEvent('Extreme heat wave warning in Downtown Brooklyn')">
-                        🔥 Trigger Heat Wave
-                    </button>
-                    <button class="btn" style="background-color: #64748b;" onclick="triggerEvent('Blizzard warning across Central Park')">
-                        ❄️ Trigger Snowstorm
-                    </button>
+                <div class="form-group">
+                    <label class="form-label">Incoming Webhook</label>
+                    <select id="event-select" class="select-input">
+                        <option value="Category 4 Blizzard hitting Central Park">Category 4 Blizzard (Central Park)</option>
+                        <option value="Sudden severe thunderstorm warning in Midtown Manhattan">Midtown Downpour</option>
+                        <option value="Extreme heat wave warning in Downtown Brooklyn, July Heatwave">July Heatwave</option>
+                        <option value="Local Team Wins Championship">Local Team Wins Championship</option>
+                        <option value="Viral Pop Culture Moment">Viral Pop Culture Moment</option>
+                    </select>
                 </div>
+                <button id="trigger-btn" class="btn" onclick="triggerEvent()">
+                    Execute Trigger Injection
+                </button>
             </div>
         </div>
 
-        <!-- Column 2: Agent Logs -->
+        <!-- Column 2: Logs -->
         <div class="panel">
-            <div class="panel-header">Agent Internal Reasoner (MCP Logs)</div>
+            <div class="panel-header">2. AI Engine (Vector + Pricing)</div>
             <div class="panel-body" style="padding:0; background:black;">
-                <div class="terminal" id="terminal">
-                    <div class="log-line">OmniCaster OS v1.0 initialized.</div>
-                    <div class="log-line">Awaiting environmental triggers...</div>
+                <div class="terminal" id="terminal"></div>
+            </div>
+        </div>
+
+        <!-- Column 3: The Ad -->
+        <div class="panel">
+            <div class="panel-header">3. Multimodal Ad Studio</div>
+            <div class="panel-body">
+                <div id="empty-campaigns" class="empty-state">Waiting for dynamic generation...</div>
+                <div id="campaign-card" class="campaign-card">
+                    <div class="ig-header">
+                        <div class="ig-avatar">DS</div>
+                        <div class="ig-brand">DemandSync Retail</div>
+                    </div>
+                    <div class="ig-image-container">
+                        <img id="ad-image" src="" alt="Generated Ad Creative">
+                    </div>
+                    <div class="ig-footer">
+                        <div class="ig-caption"><span id="ad-copy-text">Loading copy...</span></div>
+                    </div>
+                </div>
+                <div class="live-price-container" id="price-container" style="display:none;">
+                    <div style="color:#94a3b8; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.5rem;">Live Surge Price</div>
+                    <div class="live-price" id="live-price">$0.00</div>
+                    <div style="color:#06b6d4; font-size:0.8rem; margin-top:0.5rem;" id="pricing-reasoning">Algorithmic analysis...</div>
                 </div>
             </div>
         </div>
 
-        <!-- Column 3: Active Campaigns -->
+        <!-- Column 4: Supply Chain -->
         <div class="panel">
-            <div class="panel-header">Active Campaigns</div>
+            <div class="panel-header">4. Supply Chain Actuation</div>
             <div class="panel-body">
+                <div style="text-align: center; color: #cbd5e1; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 0.05em;">Live Inventory</div>
+                <div class="stock-ticker" id="stock-ticker">--</div>
                 
-                <div id="empty-campaigns" class="empty-state">
-                    No active campaigns. Waiting for agent deployment...
-                </div>
+                <button id="viral-btn" class="btn btn-surge" onclick="simulateViralSales()">
+                    Execute Sales Simulation
+                </button>
 
-                <div id="campaign-card" class="campaign-card">
-                    <h3 class="campaign-title">Deployed Geo-Fenced Ad</h3>
-                    <div class="ad-copy-box" id="ad-copy-text">
-                        Loading copy...
-                    </div>
-                    <div class="stats-grid">
-                        <div class="stat-box">
-                            <div class="stat-value" id="target-zip">---</div>
-                            <div class="stat-label">Target Zip</div>
-                        </div>
-                        <div class="stat-box">
-                            <div class="stat-value" id="stock-count">--</div>
-                            <div class="stat-label">Stock Remaining</div>
-                        </div>
-                    </div>
+                <div id="po-receipt" class="po-receipt">
+                    <h3>SUPPLIER PO TRANSMITTED</h3>
+                    <div style="font-family: monospace; font-size: 0.8rem; margin-top: 1rem;" id="po-details"></div>
                 </div>
-
             </div>
         </div>
     </div>
 
     <script>
         const terminal = document.getElementById('terminal');
-        const campaignCard = document.getElementById('campaign-card');
-        const emptyState = document.getElementById('empty-campaigns');
+        let currentItemId = null;
 
         function appendLog(message) {
             const time = new Date().toLocaleTimeString('en-US', { hour12: false });
             const line = document.createElement('div');
             line.className = 'log-line';
-            line.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
+            line.innerHTML = `<span style="color:#64748b">[${time}]</span> ${message}`;
             terminal.appendChild(line);
             terminal.scrollTop = terminal.scrollHeight;
         }
 
-        async function triggerEvent(desc) {
-            appendLog(`> Sending trigger: "${desc}"`);
+        async function triggerEvent() {
+            document.getElementById('trigger-btn').disabled = true;
+            document.getElementById('empty-campaigns').style.display = 'block';
+            document.getElementById('campaign-card').classList.remove('active');
+            document.getElementById('price-container').style.display = 'none';
+            document.getElementById('viral-btn').style.display = 'none';
+            document.getElementById('po-receipt').style.display = 'none';
+            document.getElementById('stock-ticker').textContent = '--';
+            
+            const desc = document.getElementById('event-select').value;
+            appendLog(`> Firing Webhook: "${desc}"`);
+            
             try {
                 await fetch('/api/trigger', {
                     method: 'POST',
@@ -298,36 +348,81 @@
                     body: JSON.stringify({ event_description: desc })
                 });
             } catch (e) {
-                appendLog(`<span style="color:red">Error sending trigger: ${e.message}</span>`);
+                appendLog(`<span style="color:red">Error: ${e.message}</span>`);
+                document.getElementById('trigger-btn').disabled = false;
             }
         }
 
-        // Setup SSE for logs
+        async function simulateViralSales() {
+            if(!currentItemId) return;
+            document.getElementById('viral-btn').disabled = true;
+            document.getElementById('viral-btn').innerText = "Simulating...";
+            
+            try {
+                await fetch('/api/simulate_sales', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_id: currentItemId })
+                });
+            } catch (e) {
+                appendLog(`<span style="color:red">Error: ${e.message}</span>`);
+            }
+        }
+
         const eventSource = new EventSource('/api/logs');
-        
         eventSource.onmessage = function(event) {
             try {
                 const data = JSON.parse(event.data);
                 if (data.message) {
+                    // check if it's a stock decrement message to update UI smoothly
+                    const stockMatch = data.message.match(/Stock decremented -> (\d+)/);
+                    if(stockMatch) {
+                        document.getElementById('stock-ticker').textContent = stockMatch[1];
+                    }
                     appendLog(data.message);
                 }
                 
-                // If it contains campaign data, update UI
-                if (data.campaign) {
-                    emptyState.style.display = 'none';
-                    campaignCard.classList.add('active');
+                if (data.message.includes("AD CAMPAIGN GENERATED")) {
+                    document.getElementById('trigger-btn').disabled = false;
+                    const camp = data.campaign;
+                    currentItemId = camp.item_id;
                     
-                    document.getElementById('ad-copy-text').textContent = `"${data.campaign.copy}"`;
-                    document.getElementById('target-zip').textContent = data.campaign.zip_code;
-                    document.getElementById('stock-count').textContent = data.campaign.remaining_stock;
+                    document.getElementById('empty-campaigns').style.display = 'none';
+                    document.getElementById('campaign-card').classList.add('active');
+                    document.getElementById('price-container').style.display = 'block';
+                    
+                    document.getElementById('ad-copy-text').textContent = camp.copy;
+                    document.getElementById('live-price').textContent = `$${camp.current_price.toFixed(2)}`;
+                    document.getElementById('pricing-reasoning').textContent = camp.pricing_reasoning;
+                    document.getElementById('stock-ticker').textContent = camp.remaining_stock;
+                    
+                    if(camp.image_b64) {
+                        document.getElementById('ad-image').src = "data:image/jpeg;base64," + camp.image_b64;
+                        document.getElementById('ad-image').style.display = "block";
+                    } else {
+                        // fallback css placeholder
+                        document.getElementById('ad-image').src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMzMzQxNTUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NDc0OGIiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkltYWdlIFBsYWNlaG9sZGVyPC90ZXh0Pjwvc3ZnPg==';
+                        document.getElementById('ad-image').style.display = "block";
+                    }
+
+                    document.getElementById('viral-btn').style.display = 'block';
+                    document.getElementById('viral-btn').disabled = false;
+                    document.getElementById('viral-btn').innerText = "Execute Sales Simulation";
+                }
+
+                if (data.po) {
+                    document.getElementById('po-receipt').style.display = 'block';
+                    document.getElementById('po-details').innerHTML = `
+                        PO: ${data.po.po_number}<br>
+                        Item ID: ${data.po.item_id}<br>
+                        Quantity: ${data.po.quantity}<br>
+                        Status: ${data.po.status}<br>
+                        Supplier: ${data.po.supplier}
+                    `;
                 }
             } catch (e) {
                 console.error("Parse error", e);
             }
-        };
-        
-        eventSource.onerror = function() {
-            console.log("SSE disconnected. Reconnecting...");
         };
     </script>
 </body>

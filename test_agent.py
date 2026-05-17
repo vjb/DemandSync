@@ -1,9 +1,9 @@
 import asyncio
-from omnicaster_agent import OmniCaster
+from demandsync_v2_agent import DemandSyncV2Agent
 
 async def main():
-    agent = OmniCaster()
-    result = await agent.handle_environmental_trigger("Downpour in Midtown")
+    agent = DemandSyncV2Agent()
+    result = await agent.handle_environmental_trigger("Category 4 Blizzard hitting Central Park")
     print(result)
 
 if __name__ == "__main__":

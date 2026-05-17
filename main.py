@@ -6,19 +6,24 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from omnicaster_agent import OmniCaster
-
-app = FastAPI(title="OmniCaster API")
-
-# Mount static files
+from demandsync_v2_agent import DemandSyncV2Agent
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
+
+app = FastAPI(title="DemandSync API")
+
 os.makedirs("static", exist_ok=True)
+os.makedirs("static/assets", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class TriggerRequest(BaseModel):
     event_description: str
 
-# Message queue for SSE
+class SimulateSalesRequest(BaseModel):
+    item_id: str
+
 log_queue = asyncio.Queue()
 
 async def update_callback(message: str, data=None):
@@ -27,47 +32,54 @@ async def update_callback(message: str, data=None):
         payload["data"] = data
     await log_queue.put(json.dumps(payload))
 
+agent = DemandSyncV2Agent(update_callback=update_callback)
+
 @app.post("/api/trigger")
 async def trigger_event(req: TriggerRequest):
-    # Fire off agent in background so we don't block
     asyncio.create_task(run_agent_flow(req.event_description))
     return {"status": "started"}
 
+@app.post("/api/simulate_sales")
+async def simulate_sales(req: SimulateSalesRequest):
+    asyncio.create_task(run_viral_sales(req.item_id))
+    return {"status": "simulating"}
+
 async def run_agent_flow(event_description: str):
-    agent = OmniCaster(update_callback=update_callback)
-    
-    # Notify start
-    await log_queue.put(json.dumps({"message": "--- AGENT STARTED ---"}))
-    
+    await log_queue.put(json.dumps({"message": "[INFO] Agent flow sequence initiated."}))
     result = await agent.handle_environmental_trigger(event_description)
     
     if result:
         await log_queue.put(json.dumps({
-            "message": "--- AGENT COMPLETED ---",
+            "message": "[INFO] Ad payload generated and deployed.",
             "campaign": result
         }))
     else:
         await log_queue.put(json.dumps({
-            "message": "--- AGENT FAILED TO FIND MATCH ---"
+            "message": "[WARN] Agent sequence aborted: No semantic match or stock zero."
+        }))
+
+async def run_viral_sales(item_id: str):
+    await log_queue.put(json.dumps({"message": "[INFO] Sales simulation loop initiated."}))
+    po = await agent.execute_viral_sales(item_id)
+    if po:
+        await log_queue.put(json.dumps({
+            "message": "[INFO] Supply chain actuation event completed.",
+            "po": po
         }))
 
 @app.get("/api/logs")
 async def stream_logs(request: Request):
     async def event_generator():
         while True:
-            # If client closes connection, stop sending
             if await request.is_disconnected():
                 break
-                
             try:
-                # Wait for next log message
                 log_msg = await asyncio.wait_for(log_queue.get(), timeout=1.0)
                 yield {
                     "event": "message",
                     "data": log_msg
                 }
             except asyncio.TimeoutError:
-                # Keep connection alive
                 yield {
                     "event": "ping",
                     "data": "keepalive"

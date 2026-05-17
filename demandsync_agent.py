@@ -16,14 +16,13 @@ load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/hackathon")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
-# We need a mock Python function for deployment
-def deploy_geofenced_ad(zip_code: str, radius: float, copy: str, item_id: str = None) -> bool:
-    print(f"DEPLOYING AD to {zip_code} (radius: {radius}mi): {copy}")
+def deploy_geofenced_ad(zip_code: str, radius: float, copy: str, image_url: str, item_id: str = None) -> bool:
+    print(f"DEPLOYING AD to {zip_code} (radius: {radius}mi): {copy} | Image: {image_url}")
     if not item_id:
         return True
         
     client = MongoClient(MONGO_URI)
-    db = client.get_database("omnicaster_db")
+    db = client.get_database("demandsync_db")
     collection = db.get_collection("local_inventory")
     
     result = collection.update_one(
@@ -32,7 +31,7 @@ def deploy_geofenced_ad(zip_code: str, radius: float, copy: str, item_id: str = 
     )
     return result.modified_count > 0
 
-class OmniCaster:
+class DemandSyncAgent:
     def __init__(self, update_callback=None):
         self.update_callback = update_callback or (lambda msg, data=None: None)
         
@@ -41,11 +40,10 @@ class OmniCaster:
         except Exception:
             self.ai_client = None
 
-        # Determine OS specific command
         self.npx_cmd = "npx.cmd" if os.name == "nt" else "npx"
             
     async def log_step(self, message: str, data: Any = None):
-        print(f"[OmniCaster] {message}")
+        print(f"[DemandSync] {message}")
         if asyncio.iscoroutinefunction(self.update_callback):
             await self.update_callback(message, data)
         else:
@@ -53,7 +51,6 @@ class OmniCaster:
 
     async def get_embedding(self, text: str) -> List[float]:
         if not self.ai_client:
-            # Return dummy embedding if no key
             return [0.0] * 768
             
         try:
@@ -69,7 +66,6 @@ class OmniCaster:
     async def run_vector_search_mcp(self, vector: List[float], event_description: str) -> List[Dict]:
         await self.log_step("Initializing MongoDB MCP server...")
         
-        # Prepare MCP
         env = os.environ.copy()
         env["MONGO_URI"] = MONGO_URI
         
@@ -82,36 +78,28 @@ class OmniCaster:
         try:
             async with stdio_client(server_params) as (read, write):
                 async with ClientSession(read, write) as session:
-                    # Added timeout to prevent hanging if npx fails and doesn't write to stdout
                     await asyncio.wait_for(session.initialize(), timeout=5.0)
                     await self.log_step("MongoDB MCP Connected. Searching for tools...")
                     
                     tools_result = await session.list_tools()
                     tools = tools_result.tools
-                    tool_names = [t.name for t in tools]
-                    await self.log_step(f"Available MCP Tools: {tool_names}")
-                    
-                    # Instead of forcing a specific tool name, we can ask the MCP to do the search if a vector tool exists.
-                    # Since @mongodb/mcp tool names might be like "mongodb_atlas_vector_search" or "search_mongodb", we handle dynamically or fallback
                     search_tool = next((t.name for t in tools if "vector" in t.name.lower() or "search" in t.name.lower()), None)
                     
                     if search_tool:
                         await self.log_step(f"Using MCP tool: {search_tool}")
                         try:
-                            # Typical args might be db, collection, index, queryVector
                             result = await session.call_tool(
                                 search_tool,
                                 arguments={
-                                    "database": "omnicaster_db" if "omnicaster_db" in MONGO_URI else "omnicaster",
+                                    "database": "demandsync_db",
                                     "collection": "local_inventory",
                                     "queryVector": vector,
                                     "index": "vector_index",
                                     "path": "embedding",
-                                    "numCandidates": 10,
+                                    "numCandidates": 15,
                                     "limit": 5
                                 }
                             )
-                            # Try to parse the result
                             if result.content and len(result.content) > 0:
                                 parsed = json.loads(result.content[0].text)
                                 return parsed
@@ -121,15 +109,14 @@ class OmniCaster:
                         await self.log_step("No suitable MCP vector search tool found. Falling back to PyMongo...")
                         
         except Exception as e:
-            await self.log_step(f"MCP Connection failed: {e}. Falling back to PyMongo...")
+            await self.log_step(f"MCP Connection failed or timed out: {e}. Falling back to PyMongo...")
 
-        # Fallback to direct PyMongo if MCP fails or is unavailable in the environment
+        # Fallback PyMongo search
         await self.log_step("Executing direct PyMongo vector search (or semantic match fallback)...")
         client = MongoClient(MONGO_URI)
-        db = client.get_database("omnicaster_db")
+        db = client.get_database("demandsync_db")
         collection = db.get_collection("local_inventory")
         
-        # If true vector search is set up in Atlas:
         try:
             pipeline = [
                 {
@@ -137,7 +124,7 @@ class OmniCaster:
                         "index": "vector_index",
                         "path": "embedding",
                         "queryVector": vector,
-                        "numCandidates": 10,
+                        "numCandidates": 15,
                         "limit": 5
                     }
                 }
@@ -148,10 +135,52 @@ class OmniCaster:
         except Exception:
             pass
 
-        # If no vector index is created yet, we simulate a semantic search by fetching all and just returning a few that might match text
-        # For hackathon/demo purposes without atlas configured
         items = list(collection.find({"stock_count": {"$gt": 0}}).limit(3))
         return items
+
+    async def generate_ad_creative(self, product_name: str, event_description: str) -> str:
+        await self.log_step("Generating visual ad creative with Imagen 3.0...")
+        import base64
+        
+        image_b64 = ""
+        if not self.ai_client:
+            await self.log_step("No GenAI API key. Simulating creative generation.")
+            return image_b64
+            
+        prompt = f"A cinematic, high-quality product shot of a {product_name} in a New York City setting during a {event_description}. Social media ad style, vibrant, hyper-realistic."
+        
+        try:
+            try:
+                result = self.ai_client.models.generate_images(
+                    model='imagen-3.0-generate-001',
+                    prompt=prompt,
+                    config=genai.types.GenerateImagesConfig(
+                        number_of_images=1,
+                        output_mime_type="image/jpeg",
+                        aspect_ratio="1:1"
+                    )
+                )
+            except Exception as model_err:
+                await self.log_step(f"Imagen 3.0 failed ({model_err}). Trying fallback to imagen-4.0...")
+                result = self.ai_client.models.generate_images(
+                    model='imagen-4.0-generate-001',
+                    prompt=prompt,
+                    config=genai.types.GenerateImagesConfig(
+                        number_of_images=1,
+                        output_mime_type="image/jpeg",
+                        aspect_ratio="1:1"
+                    )
+                )
+
+            if result.generated_images:
+                image_b64 = base64.b64encode(result.generated_images[0].image.image_bytes).decode('utf-8')
+                await self.log_step("Ad creative generated successfully!")
+            else:
+                await self.log_step("No image generated by API.")
+        except Exception as e:
+            await self.log_step(f"Imagen API Error: {e}")
+            
+        return image_b64
 
     async def handle_environmental_trigger(self, event_description: str):
         await self.log_step(f"Received Trigger: {event_description}")
@@ -163,17 +192,18 @@ class OmniCaster:
         # 2. Vector search via MCP
         raw_inventory = await self.run_vector_search_mcp(vector, event_description)
         
-        # Filter stock count > 0 (just in case query didn't)
+        # Anti-False Advertising check
         in_stock_inventory = [item for item in raw_inventory if item.get('stock_count', 0) > 0]
         
         if not in_stock_inventory:
-            await self.log_step("No relevant in-stock inventory found for this event.")
+            await self.log_step("Anti-False Advertising Engine: Aborting! No stock available for matching items.")
             return None
 
-        # Take the top match
+        # Take top match
         top_match = in_stock_inventory[0]
         if '_id' in top_match:
             top_match['_id'] = str(top_match['_id'])
+            
         await self.log_step(f"Top Semantic Match: {top_match.get('name')} (Stock: {top_match.get('stock_count')})", data=top_match)
         
         # 3. Generate Ad Copy
@@ -190,11 +220,11 @@ class OmniCaster:
         Example: "Caught in the rain in Midtown? We have 12 storm-proof umbrellas left at our 5th Ave store."
         """
         
-        ad_copy = "Caught in the weather? We have what you need in stock!" # Fallback
+        ad_copy = "Caught in the weather? We have what you need in stock!" 
         if self.ai_client:
             try:
                 response = self.ai_client.models.generate_content(
-                    model='gemini-3.1-pro-preview', # We use the latest available SDK model, referring to as 3.1 Pro in prompt/docs
+                    model='gemini-3.1-pro-preview',
                     contents=prompt
                 )
                 ad_copy = response.text.strip()
@@ -205,10 +235,13 @@ class OmniCaster:
             
         await self.log_step(f"Generated Copy: {ad_copy}")
         
-        # 4. Deploy Ad
+        # 4. Generate Creative (Imagen 3.0)
+        image_b64 = await self.generate_ad_creative(top_match.get('name'), event_description)
+        
+        # 5. Deploy Ad
         await self.log_step("Executing tool call: deploy_geofenced_ad...")
         zip_code = "10018" # Midtown Manhattan
-        success = deploy_geofenced_ad(zip_code, radius=1.5, copy=ad_copy, item_id=top_match.get('item_id'))
+        success = deploy_geofenced_ad(zip_code, radius=1.5, copy=ad_copy, image_url="base64_image", item_id=top_match.get('item_id'))
         
         if success:
             await self.log_step("Deployment Successful. Inventory decremented.")
@@ -217,6 +250,7 @@ class OmniCaster:
             
         return {
             "copy": ad_copy,
+            "image_b64": image_b64,
             "zip_code": zip_code,
             "item": top_match,
             "remaining_stock": top_match.get('stock_count', 1) - 1
